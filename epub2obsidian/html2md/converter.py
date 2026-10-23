@@ -5,7 +5,7 @@ a ogni tag di blocco. Cosi' gli spazi si normalizzano per paragrafo e i prefissi
 (citazioni, elenchi) si applicano una volta sola.
 
 Le parti separate vivono in file propri:
-    inline.py  -> grassetto/corsivo e spazi      blocks.py -> unione dei blocchi
+    inline.py  -> grassetto/corsivo/link, spazi  blocks.py -> unione dei blocchi
     tables.py  -> tabelle (TableMixin)
 """
 from __future__ import annotations
@@ -16,8 +16,8 @@ from typing import Callable, Optional
 
 from ..textutils import plain_title
 from .blocks import join_blocks
-from .constants import BLOCK_TAGS, HEADINGS, IGNORED, MARKERS
-from .inline import render_inline, tidy
+from .constants import BLOCK_TAGS, EXTERNAL_LINKS, HEADINGS, IGNORED, MARKERS
+from .inline import Link, render_inline, tidy
 from .result import ConversionResult
 from .tables import TableMixin
 
@@ -49,9 +49,20 @@ class MarkdownConverter(TableMixin, HTMLParser):
         self.first_text = ""
         self.has_images = False
 
+        self.link_stack: list[Optional[Link]] = []  # un elemento per ogni <a> aperto
+        self.anchors: dict[str, int] = {}           # id HTML -> indice del blocco che inizia li'
+
     # ------------------------------------------------------------------ tag
 
     def handle_starttag(self, tag, attrs):
+        skip = self.ignore_depth or self.in_pre
+        self._start(tag, attrs)
+        # L'id si registra DOPO la gestione del tag: cosi' il suo blocco e' il prossimo da emettere.
+        ident = dict(attrs).get("id")
+        if ident and not skip and tag not in IGNORED:
+            self.anchors.setdefault(ident, len(self.blocks))
+
+    def _start(self, tag, attrs):
         if tag in IGNORED:
             self.ignore_depth += 1
             return
@@ -119,6 +130,11 @@ class MarkdownConverter(TableMixin, HTMLParser):
         elif tag in MARKERS:
             if not self.heading_level:
                 self.buf.append(("open", MARKERS[tag]))
+        elif tag == "a":
+            link = self._link(attrs)
+            self.link_stack.append(link)
+            if link and not self.heading_level:  # nei titoli il link resta testo semplice
+                self.buf.append(("open", link))
         elif tag in ("sup", "sub"):
             self.buf.append(f"<{tag}>")
         elif tag in ("img", "image"):
@@ -164,6 +180,10 @@ class MarkdownConverter(TableMixin, HTMLParser):
         elif tag in MARKERS:
             if not self.heading_level:
                 self.buf.append(("close", MARKERS[tag]))
+        elif tag == "a":
+            link = self.link_stack.pop() if self.link_stack else None
+            if link and not self.heading_level:
+                self.buf.append(("close", link))
         elif tag in ("sup", "sub"):
             self.buf.append(f"</{tag}>")
 
@@ -177,6 +197,15 @@ class MarkdownConverter(TableMixin, HTMLParser):
         data = re.sub(r"\s+", " ", data)  # gli a capo del sorgente HTML NON sono a capo
         if data:
             self.buf.append(data)
+
+    @staticmethod
+    def _link(attrs: dict) -> Optional[Link]:
+        """Link esterno (http, https, mailto) oppure None. L'URL e' protetto per Markdown."""
+        href = (attrs.get("href") or "").strip()
+        if not href.lower().startswith(EXTERNAL_LINKS):
+            return None
+        safe = {" ": "%20", "(": "%28", ")": "%29", "<": "%3C", ">": "%3E"}
+        return Link("".join(safe.get(c, c) for c in href))
 
     def _image(self, attrs: dict) -> None:
         src = attrs.get("src") or attrs.get("xlink:href") or attrs.get("href") or ""
@@ -253,4 +282,7 @@ class MarkdownConverter(TableMixin, HTMLParser):
 
     def result(self) -> ConversionResult:
         self._flush()
-        return ConversionResult(join_blocks(self.blocks), self.first_heading, self.first_text, self.has_images)
+        return ConversionResult(
+            join_blocks(self.blocks), self.first_heading, self.first_text, self.has_images,
+            blocks=self.blocks, anchors=self.anchors,
+        )

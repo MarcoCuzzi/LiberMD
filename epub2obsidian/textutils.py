@@ -11,8 +11,9 @@ def yaml_str(value: str) -> str:
 
 
 def plain_title(text: str) -> str:
-    """Toglie dal testo Markdown immagini, tag HTML ed enfasi, per ricavarne un titolo."""
+    """Toglie dal testo Markdown immagini, link, tag HTML ed enfasi, per ricavarne un titolo."""
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
     text = re.sub(r"<[^>]+>", "", text)
     text = re.sub(r"[*`~]", "", text)
     return re.sub(r"\s+", " ", text).strip()

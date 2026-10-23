@@ -27,7 +27,7 @@ EPUB --readers/epub--> Book --writers/obsidian--> cartella di note .md
 | Struttura dati (Book, Chapter, metadati)        | `models.py`                            |
 | Nomi di note/immagini, alias dei link           | `naming.py`                            |
 | Escape YAML, titolo "pulito"                    | `textutils.py`                         |
-| Grassetto/corsivo, spazi nel testo              | `html2md/inline.py`                    |
+| Grassetto/corsivo, link esterni, spazi          | `html2md/inline.py`                    |
 | Separatori tra paragrafi, liste, citazioni      | `html2md/blocks.py`                    |
 | Tabelle HTML -> Markdown                        | `html2md/tables.py`                    |
 | Tag HTML gestiti, marcatori Markdown            | `html2md/constants.py`                 |
@@ -35,6 +35,7 @@ EPUB --readers/epub--> Book --writers/obsidian--> cartella di note .md
 | Come si trova il file OPF / metadati / spine    | `readers/epub/opf.py`                  |
 | Estrazione e percorsi delle immagini            | `readers/epub/media.py`                |
 | Ricerca file nello ZIP, decodifica testo        | `readers/epub/zipindex.py`, `xmlutils.py` |
+| Sommario (nav.xhtml / toc.ncx), capitoli divisi | `readers/epub/toc.py`                  |
 | Scelta titolo capitolo, pagine vuote            | `readers/epub/reader.py`               |
 | Frontmatter e indice del libro                  | `writers/obsidian/index_note.py`       |
 | Barra di navigazione di ogni capitolo           | `writers/obsidian/chapter_note.py`     |
