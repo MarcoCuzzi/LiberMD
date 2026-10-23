@@ -43,15 +43,21 @@ def read_metadata(opf_root: ET.Element, fallback_title: str) -> BookMetadata:
     return meta
 
 
+def read_manifest(opf_root: ET.Element) -> dict[str, dict[str, str]]:
+    """Elementi del manifest: id -> attributi (href, media-type, properties...)."""
+    return {
+        elem.attrib["id"]: dict(elem.attrib)
+        for elem in opf_root.iter()
+        if _local(elem.tag) == "item" and "id" in elem.attrib and "href" in elem.attrib
+    }
+
+
 def read_spine(opf_root: ET.Element, opf_dir: str) -> list[str]:
-    manifest = {}
-    for elem in opf_root.iter():
-        if _local(elem.tag) == "item" and "id" in elem.attrib and "href" in elem.attrib:
-            manifest[elem.attrib["id"]] = elem.attrib["href"]
+    manifest = read_manifest(opf_root)
 
     spine = []
     for elem in opf_root.iter():
         if _local(elem.tag) == "itemref" and elem.attrib.get("idref") in manifest:
-            href = unquote(manifest[elem.attrib["idref"]]).split("#")[0]
+            href = unquote(manifest[elem.attrib["idref"]]["href"]).split("#")[0]
             spine.append(posixpath.normpath(posixpath.join(opf_dir, href)))
     return spine

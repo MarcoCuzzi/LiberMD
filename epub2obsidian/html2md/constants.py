@@ -12,3 +12,5 @@ MARKERS = {
     "s": "~~", "strike": "~~", "del": "~~",
     "code": "`",
 }
+# Solo questi collegamenti diventano [testo](url); quelli interni all'EPUB restano testo semplice.
+EXTERNAL_LINKS = ("http://", "https://", "mailto:")

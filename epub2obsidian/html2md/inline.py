@@ -1,16 +1,32 @@
-"""Testo "inline": unisce i frammenti con grassetto/corsivo e normalizza gli spazi.
+"""Testo "inline": unisce i frammenti con grassetto/corsivo/link e normalizza gli spazi.
 
 Funzioni pure (nessuno stato): facili da testare da sole.
 """
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Link:
+    """Marcatore di un collegamento esterno: produce `[testo](url)` invece di `**testo**`."""
+    url: str
+
+
+def _wrap(marker, core: str) -> str:
+    """Racchiude `core` nel marcatore (str come '**' oppure Link)."""
+    if isinstance(marker, Link):
+        if "![" not in core:  # un'immagine dentro il link usa le sue parentesi: non toccarle
+            core = core.replace("[", "\\[").replace("]", "\\]")
+        return f"[{core}]({marker.url})"
+    return f"{marker}{core}{marker}"
 
 
 def render_inline(tokens: list) -> str:
-    """Unisce i frammenti applicando grassetto/corsivo senza rompere il Markdown."""
+    """Unisce i frammenti applicando grassetto/corsivo/link senza rompere il Markdown."""
     out: list = []
-    stack: list[tuple[int, str]] = []
+    stack: list[tuple[int, object]] = []
     for tok in tokens:
         if isinstance(tok, str):
             out.append(tok)
@@ -31,7 +47,7 @@ def render_inline(tokens: list) -> str:
             if core:
                 lead = inner[: len(inner) - len(inner.lstrip())]
                 trail = inner[len(inner.rstrip()):]
-                replacement = f"{lead}{marker}{core}{marker}{trail}"  # spazi FUORI dai marcatori
+                replacement = f"{lead}{_wrap(marker, core)}{trail}"  # spazi FUORI dai marcatori
             else:
                 replacement = inner  # tag vuoto: niente "****"
             out[i:] = [replacement]
