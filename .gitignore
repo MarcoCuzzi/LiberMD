@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Ambienti virtuali
+.venv/
+venv/
+
+# Test e strumenti
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+
+# Editor e sistema operativo
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# File di lavoro: EPUB di prova e libri convertiti
+*.epub
+output/
