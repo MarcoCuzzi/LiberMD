@@ -2,7 +2,7 @@
 cli.py - Interfaccia a riga di comando (CLI) per il motore di conversione.
 
 Si occupa solo di leggere i comandi dalla console e di mostrare i risultati:
-tutto il lavoro vero e' in engine.py.
+tutto il lavoro vero e' nella cartella engine/.
 
 Di solito non si lancia direttamente: si avvia il programma da LiberMD.py.
 
@@ -10,7 +10,6 @@ Uso:
     python LiberMD.py libro.epub
     python LiberMD.py libro.epub -o /percorso/del/vault
     python LiberMD.py libro.epub -q
-    python LiberMD.py libro.epub --no-lock     # originali NON in sola lettura
     python LiberMD.py libro.epub --force       # rigenera anche le copie di lavoro (perdi le tue note!)
 """
 import argparse
@@ -26,7 +25,7 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
     parser = argparse.ArgumentParser(
         prog=prog,
         description=f"{prog} - converte un EPUB in note Markdown per Obsidian "
-                    f"(originali in sola lettura + copie di lavoro con i collegamenti).",
+                    f"(originali + copie di lavoro con i collegamenti).",
     )
     if version:
         parser.add_argument("--version", action="version", version=f"{prog} {version}")
@@ -35,8 +34,6 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
                         help="cartella in cui creare la cartella del libro (default: cartella corrente)")
     parser.add_argument("-q", "--quiet", action="store_true",
                         help="non mostrare l'avanzamento, solo il risultato finale")
-    parser.add_argument("--no-lock", action="store_true",
-                        help="non mettere in sola lettura i file della cartella originali/")
     parser.add_argument("--force", action="store_true",
                         help="rigenera anche le copie di lavoro gia' esistenti (sovrascrive le tue note)")
     args = parser.parse_args(argv)
@@ -45,7 +42,7 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
 
     try:
         report = convert(args.epub, args.out, on_progress=progress,
-                         lock_originals=not args.no_lock, overwrite_working=args.force)
+                         overwrite_working=args.force)
     except EpubError as exc:
         print(f"[!] ERRORE: {exc}", file=sys.stderr)
         return 1
@@ -58,8 +55,7 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
     print(f"     {report.chapters} capitoli, {report.images} immagini, "
           f"{report.skipped_pages} pagine vuote saltate")
     print(f"     Copie di lavoro: {report.out_dir.resolve()}")
-    print(f"     Originali:       {report.originals_dir.resolve()}"
-          f"{'' if args.no_lock else '  (sola lettura)'}")
+    print(f"     Originali:       {report.originals_dir.resolve()}")
     if report.style_path is not None:
         if report.style_in_vault:
             print(f"     Stile: {report.style_path}")

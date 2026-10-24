@@ -18,7 +18,8 @@ diventa una barra sottile e la pagina prende l'aspetto di un libro.
 
 Due versioni di ogni capitolo:
     COPIA      la versione dell'utente: avanti/indietro tra le copie + link all'ORIGINALE
-    ORIGINALE  il testo intatto: avanti/indietro tra gli originali + link alla COPIA
+    ORIGINALE  il testo intatto: avanti/indietro tra gli originali + link alla COPIA,
+               con in piu' un avviso in cima ("questo e' l'originale, scrivi nella copia")
 
 Questo file non sa come si chiamano i file su disco: riceve i nomi gia' pronti
 (NavContext) e produce solo testo. Di nomi e cartelle si occupa writer.py.
@@ -33,6 +34,7 @@ ORIGINAL = "originale"
 
 CSS_CLASS = "libermd"
 NAV_CALLOUT = "libermd-nav"
+NOTICE_CALLOUT = "warning"          # tipo predefinito di Obsidian: ha gia' colore e icona anche senza stile
 CSS_FILE_NAME = "LiberMD.css"
 
 
@@ -55,6 +57,13 @@ def nav_bar(ctx: NavContext) -> str:
     return f"> [!{NAV_CALLOUT}] {prev_link} · {index_link} · {other_link} · {next_link}"
 
 
+def original_notice(ctx: NavContext) -> str:
+    """Avviso in cima agli ORIGINALI: ricorda di scrivere le note nella copia di lavoro."""
+    return (f"> [!{NOTICE_CALLOUT}] Copia originale\n"
+            f"> Questo è il testo intatto del libro. Le tue note vanno nella "
+            f"[[{ctx.other_stem}|tua copia]].\n\n")
+
+
 def frontmatter(kind: str) -> str:
     """Proprieta' che attivano lo stile; 'kind' permette di distinguere copie e originali."""
     return f"---\ncssclasses:\n  - {CSS_CLASS}\n  - {CSS_CLASS}-{kind}\n---\n"
@@ -63,7 +72,8 @@ def frontmatter(kind: str) -> str:
 def dress(markdown: str, ctx: NavContext) -> str:
     """Testo di un capitolo -> contenuto completo del file."""
     bar = nav_bar(ctx)
-    return f"{frontmatter(ctx.kind)}\n{bar}\n\n{markdown}\n\n{bar}\n"
+    notice = original_notice(ctx) if ctx.kind == ORIGINAL else ""
+    return f"{frontmatter(ctx.kind)}\n{bar}\n\n{notice}{markdown}\n\n{bar}\n"
 
 
 # ----------------------------------------------------------------------------
@@ -158,5 +168,8 @@ CSS_TEXT = """\
 }
 .libermd-originale .callout[data-callout="libermd-nav"] {
   border-color: var(--color-orange, #d08a2e);
+}
+.libermd-originale .callout[data-callout="warning"] {
+  --callout-color: 230, 180, 0;           /* giallo ambra */
 }
 """

@@ -4,7 +4,7 @@ LiberMD.py - Punto di partenza del programma.
 E' l'unico file che si lancia. Non contiene logica: decide solo quale interfaccia
 avviare. Tutto il lavoro vero e' negli altri file:
 
-    LiberMD.py -> cli.py -> engine.py -> writer.py -> nav.py
+    LiberMD.py -> cli.py -> engine/ -> writer.py -> nav.py
                                 |            |
                                 +------------+--> sanitizer.py
                                 (engine e writer usano entrambi il sanificatore)
