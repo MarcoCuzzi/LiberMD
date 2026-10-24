@@ -19,6 +19,7 @@ Il modulo non dipende da nient'altro: contiene solo funzioni pure su stringhe.
     escape_text(frammento)    per ogni pezzo di testo dentro una riga
     escape_line_start(riga)   per l'inizio di ogni riga
     unescape(testo)           per tornare al testo originale (titoli)
+    plain_title(markdown)     titolo "vero" ricavato da un testo Markdown
 
     sanitize_name(titolo)     nome sicuro per un file di nota (e per i [[link]])
     sanitize_filename(nome)   nome sicuro per un'immagine
@@ -82,6 +83,21 @@ _BACKSLASH_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
 def unescape(text: str) -> str:
     """Inverso di escape_text/escape_line_start: toglie la barra davanti alla punteggiatura."""
     return _BACKSLASH_ESCAPE.sub(r"\1", text)
+
+
+# ----------------------------------------------------------------------------
+# Titoli
+# ----------------------------------------------------------------------------
+
+def plain_title(text: str) -> str:
+    """
+    Dal testo Markdown ricava un titolo "vero": toglie immagini, tag HTML ed enfasi
+    generati dal convertitore, poi le barre di escape messe dal sanificatore.
+    """
+    text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)   # immagini generate (quelle nel testo sono escapate)
+    text = re.sub(r"<[^>]+>", "", text)                    # <sup> ecc. generati
+    text = re.sub(r"(?<!\\)[*`~]", "", text)               # marcatori generati, non quelli escapati
+    return re.sub(r"\s+", " ", unescape(text)).strip()
 
 
 # ----------------------------------------------------------------------------

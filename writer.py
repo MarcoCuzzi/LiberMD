@@ -1,7 +1,8 @@
 """
 writer.py - Scrive un libro su disco come cartella con DUE versioni dei capitoli.
 
-Riceve un libro gia' convertito (oggetto Book, definito in engine.py) e decide
+Riceve un libro gia' convertito (oggetto Book, definito in
+engine/engine_book_models.py) e decide
 come salvarlo: nomi dei file, cartelle, cosa sovrascrivere. Non sa nulla di EPUB
 e non converte nulla. L'aspetto delle pagine (barre di navigazione, stile) e' di nav.py.
 
@@ -9,13 +10,14 @@ e non converte nulla. L'aspetto delle pagine (barre di navigazione, stile) e' di
       00 - Indice.md               indice con i metadati e i collegamenti (modificabile)
       01 - Titolo.md  ...          copie di LAVORO: quelle su cui scrivi
       originali/
-        OR - 01 - Titolo.md  ...   ORIGINALI: il testo intatto (sola lettura)
+        OR - 01 - Titolo.md  ...   ORIGINALI: il testo intatto (con un avviso in cima)
       media/                       immagini, condivise dalle due versioni
 
 Il nome dell'originale e' sempre "OR - " + nome della copia di lavoro.
 
 Regole di scrittura:
-    - gli ORIGINALI si rigenerano sempre (sono identici) e si possono bloccare in sola lettura;
+    - gli ORIGINALI si rigenerano sempre (sono identici) e NON sono bloccati: se ne rovini
+      uno, basta rilanciare il programma;
     - le copie di LAVORO gia' esistenti NON si toccano (potrebbero contenere le tue note),
       a meno che non si chieda esplicitamente di sovrascriverle;
     - lo STILE (LiberMD.css) non si sovrascrive se esiste: potresti averlo personalizzato.
@@ -31,8 +33,8 @@ from typing import TYPE_CHECKING, Optional
 from nav import COPY, CSS_CLASS, CSS_FILE_NAME, CSS_TEXT, ORIGINAL, NavContext, dress
 from sanitizer import clean_alias, escape_text, sanitize_name
 
-if TYPE_CHECKING:  # solo per i tipi: a runtime eviterebbe un import circolare con engine.py
-    from engine import Book, BookMetadata, Chapter
+if TYPE_CHECKING:  # solo per i tipi: a runtime eviterebbe un import circolare con il motore (engine/)
+    from engine.engine_book_models import Book, BookMetadata, Chapter
 
 INDEX_NAME = "00 - Indice"
 ORIGINALS_DIR = "originali"
@@ -90,13 +92,11 @@ def _render_index(meta: BookMetadata, chapters: list[Chapter], stems: list[str])
 # Scrittura su disco
 # ----------------------------------------------------------------------------
 
-def _write_original(path: Path, text: str, lock: bool) -> None:
+def _write_original(path: Path, text: str) -> None:
     """Scrive un originale. Gli originali si possono sempre rigenerare: sono identici."""
     if path.exists():
-        os.chmod(path, 0o644)      # sblocca, altrimenti non si potrebbe riscrivere
+        os.chmod(path, 0o644)      # sblocca i file messi in sola lettura da versioni precedenti
     path.write_text(text, encoding="utf-8")
-    if lock:
-        os.chmod(path, 0o444)      # sola lettura
 
 
 def _write_working(path: Path, text: str, overwrite: bool) -> bool:
@@ -134,8 +134,7 @@ def _install_style(out_dir: Path) -> tuple[Path, bool]:
     return path, in_vault
 
 
-def write_book(book: Book, out_dir: Path, lock_originals: bool = True,
-               overwrite_working: bool = False) -> WriteResult:
+def write_book(book: Book, out_dir: Path, overwrite_working: bool = False) -> WriteResult:
     """Scrive originali + copie di lavoro + indice + immagini + stile."""
     originals_dir = out_dir / ORIGINALS_DIR
     originals_dir.mkdir(parents=True, exist_ok=True)
@@ -161,7 +160,7 @@ def write_book(book: Book, out_dir: Path, lock_originals: bool = True,
         original_ctx = NavContext(ORIGINAL, INDEX_NAME, prev_o, next_o, other_stem=stems[i])
         original_md = chapter.markdown.replace("](media/", "](../media/")
         _write_original(originals_dir / f"{orig_stems[i]}.md",
-                        dress(original_md, original_ctx), lock_originals)
+                        dress(original_md, original_ctx))
 
         # Copia di lavoro
         prev_c, next_c = neighbour(stems, i)
