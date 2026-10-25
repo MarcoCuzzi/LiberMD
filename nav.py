@@ -5,6 +5,8 @@ Riceve il testo di un capitolo e lo "veste":
 
     ---
     cssclasses: [libermd, libermd-copia]     <- dice a Obsidian quale stile usare
+    libro: [[00 - Indice - Titolo del libro|Titolo del libro]]  <- a quale libro appartiene la pagina
+    tags: [...]                              <- "tipo/pagina" (+ "tipo/originale") e i tag scelti dall'utente
     ---
     > [!libermd-nav] <- Precedente · Indice · Originale · Successivo ->
 
@@ -26,8 +28,11 @@ Questo file non sa come si chiamano i file su disco: riceve i nomi gia' pronti
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
+
+from sanitizer import clean_alias
 
 COPY = "copia"
 ORIGINAL = "originale"
@@ -36,6 +41,8 @@ CSS_CLASS = "libermd"
 NAV_CALLOUT = "libermd-nav"
 NOTICE_CALLOUT = "warning"          # tipo predefinito di Obsidian: ha gia' colore e icona anche senza stile
 CSS_FILE_NAME = "LiberMD.css"
+PAGE_TAG = "tipo/pagina"            # tag di tutte le pagine dei capitoli (NON dell'indice): per filtrare il grafo
+ORIGINAL_TAG = "tipo/originale"     # tag che distingue le pagine originali (per filtrarle)
 
 
 @dataclass
@@ -44,36 +51,66 @@ class NavContext:
     index_stem: str              # nome (senza .md) dell'indice
     prev_stem: Optional[str]     # capitolo precedente, della STESSA versione (None se e' il primo)
     next_stem: Optional[str]     # capitolo successivo, della STESSA versione (None se e' l'ultimo)
-    other_stem: str              # lo stesso capitolo nell'ALTRA versione
+    other_stem: Optional[str]    # lo stesso capitolo nell'ALTRA versione (None se non ci sono originali)
+    book_title: str = ""          # titolo del libro (testo del collegamento all'indice)
+    tags: tuple[str, ...] = ()   # tag scelti dall'utente, uguali su tutte le pagine
+    to_url: Optional[Callable[[str], str]] = None
+                                 # se presente, "Precedente" e "Successivo" diventano link obsidian://
+                                 # (nome della nota -> indirizzo) invece di [[collegamenti]]: cosi' NON
+                                 # compaiono nel grafo di Obsidian
+
+
+def _step_link(ctx: NavContext, stem: str, label: str) -> str:
+    """Collegamento a un capitolo vicino: [[nota]] (appare nel grafo) oppure obsidian:// (non appare)."""
+    if ctx.to_url is not None:
+        return f"[{label}]({ctx.to_url(stem)})"
+    return f"[[{stem}|{label}]]"
 
 
 def nav_bar(ctx: NavContext) -> str:
     """La riga di navigazione, scritta come callout di Obsidian."""
-    prev_link = f"[[{ctx.prev_stem}|← Precedente]]" if ctx.prev_stem else "← Inizio"
-    next_link = f"[[{ctx.next_stem}|Successivo →]]" if ctx.next_stem else "Fine →"
-    index_link = f"[[{ctx.index_stem}|Indice]]"
-    other_label = "La mia copia" if ctx.kind == ORIGINAL else "Originale"
-    other_link = f"[[{ctx.other_stem}|{other_label}]]"
-    return f"> [!{NAV_CALLOUT}] {prev_link} · {index_link} · {other_link} · {next_link}"
+    prev_link = _step_link(ctx, ctx.prev_stem, "← Precedente") if ctx.prev_stem else "← Inizio"
+    next_link = _step_link(ctx, ctx.next_stem, "Successivo →") if ctx.next_stem else "Fine →"
+    parts = [prev_link, f"[[{ctx.index_stem}|Indice]]"]
+    if ctx.other_stem:                     # senza originali non c'e' il collegamento all'altra versione
+        other_label = "La mia copia" if ctx.kind == ORIGINAL else "Originale"
+        parts.append(f"[[{ctx.other_stem}|{other_label}]]")
+    parts.append(next_link)
+    return f"> [!{NAV_CALLOUT}] " + " · ".join(parts)
 
 
 def original_notice(ctx: NavContext) -> str:
     """Avviso in cima agli ORIGINALI: ricorda di scrivere le note nella copia di lavoro."""
+    copy_file = (ctx.other_stem or "").partition("#")[0]      # il file, senza il titoletto
     return (f"> [!{NOTICE_CALLOUT}] Copia originale\n"
             f"> Questo è il testo intatto del libro. Le tue note vanno nella "
-            f"[[{ctx.other_stem}|tua copia]].\n\n")
+            f"[[{copy_file}|tua copia]].\n\n")
 
 
-def frontmatter(kind: str) -> str:
-    """Proprieta' che attivano lo stile; 'kind' permette di distinguere copie e originali."""
-    return f"---\ncssclasses:\n  - {CSS_CLASS}\n  - {CSS_CLASS}-{kind}\n---\n"
+def _yaml(value: str) -> str:
+    """Stringa tra virgolette valida in YAML."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def frontmatter(ctx: NavContext) -> str:
+    """Proprieta' della pagina: stile (copie e originali si distinguono), libro di appartenenza, tag."""
+    alias = clean_alias(ctx.book_title)
+    book = f"[[{ctx.index_stem}|{alias}]]" if alias else f"[[{ctx.index_stem}]]"
+    lines = ["---", "cssclasses:", f"  - {CSS_CLASS}", f"  - {CSS_CLASS}-{ctx.kind}",
+             f"libro: {_yaml(book)}"]
+    tags = [PAGE_TAG] + ([ORIGINAL_TAG] if ctx.kind == ORIGINAL else [])
+    tags += [t for t in ctx.tags if t not in (PAGE_TAG, ORIGINAL_TAG)]
+    lines.append("tags:")
+    lines += [f"  - {_yaml(t)}" for t in tags]
+    lines.append("---")
+    return "\n".join(lines) + "\n"
 
 
 def dress(markdown: str, ctx: NavContext) -> str:
     """Testo di un capitolo -> contenuto completo del file."""
     bar = nav_bar(ctx)
     notice = original_notice(ctx) if ctx.kind == ORIGINAL else ""
-    return f"{frontmatter(ctx.kind)}\n{bar}\n\n{notice}{markdown}\n\n{bar}\n"
+    return f"{frontmatter(ctx)}\n{bar}\n\n{notice}{markdown}\n\n{bar}\n"
 
 
 # ----------------------------------------------------------------------------
@@ -173,3 +210,25 @@ CSS_TEXT = """\
   --callout-color: 230, 180, 0;           /* giallo ambra */
 }
 """
+
+
+@dataclass
+class Section:
+    """Un capitolo dentro un file che ne contiene piu' d'uno."""
+    heading: str        # titoletto della sezione (testo, senza i #)
+    markdown: str       # testo del capitolo
+    ctx: NavContext     # navigazione di QUESTA sezione (i nomi possono contenere "#titoletto")
+
+
+def dress_sections(sections: list[Section]) -> str:
+    """
+    Piu' capitoli nello stesso file: ognuno con il suo titoletto e la sua barra di navigazione
+    (sopra e sotto), separati da una riga. Proprieta' e avviso compaiono una sola volta, in cima.
+    """
+    first = sections[0].ctx
+    notice = original_notice(first) if first.kind == ORIGINAL else ""
+    blocks = []
+    for section in sections:
+        bar = nav_bar(section.ctx)
+        blocks.append(f"# {section.heading}\n\n{bar}\n\n{section.markdown}\n\n{bar}")
+    return f"{frontmatter(first)}\n{notice}" + "\n\n---\n\n".join(blocks) + "\n"

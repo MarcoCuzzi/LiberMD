@@ -6,6 +6,7 @@ Punto di ingresso:
     from engine.engine_reader import read_epub
 
     book = read_epub(Path("libro.epub"), progress=print)
+    meta = read_epub_metadata(Path("libro.epub"))     # solo titolo, autori, editore
 
 Si occupa dello ZIP, del descrittore .opf (metadati e ordine delle sezioni), delle immagini
 e dei titoli dei capitoli. La conversione HTML -> Markdown e' in engine_converter.py.
@@ -139,15 +140,27 @@ def _make_resolver(chapter_dir: str, index: _ZipIndex, path_to_name: dict[str, s
     return resolve
 
 
-def read_epub(epub_path: Path, progress: ProgressCallback = lambda msg: None) -> Book:
+def _open_epub(epub_path: Path) -> zipfile.ZipFile:
+    """Apre l'EPUB (che e' uno ZIP) o solleva un errore leggibile."""
     if not epub_path.is_file():
         raise EpubError(f"File '{epub_path}' non trovato.")
-
-    warnings: list[str] = []
     try:
-        z = zipfile.ZipFile(epub_path)
+        return zipfile.ZipFile(epub_path)
     except zipfile.BadZipFile:
         raise EpubError("Il file non e' un EPUB valido (archivio ZIP non leggibile).")
+
+
+def read_epub_metadata(epub_path: Path) -> BookMetadata:
+    """Legge SOLO i metadati (titolo, autori, editore), senza convertire nulla."""
+    with _open_epub(epub_path) as z:
+        names = [n for n in z.namelist() if not n.endswith("/")]
+        opf_root = ET.fromstring(z.read(_find_opf(z, names)))
+        return _read_metadata(opf_root, fallback_title=epub_path.stem)
+
+
+def read_epub(epub_path: Path, progress: ProgressCallback = lambda msg: None) -> Book:
+    warnings: list[str] = []
+    z = _open_epub(epub_path)
 
     with z:
         names = [n for n in z.namelist() if not n.endswith("/")]

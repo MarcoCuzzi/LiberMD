@@ -24,6 +24,9 @@ Il modulo non dipende da nient'altro: contiene solo funzioni pure su stringhe.
     sanitize_name(titolo)     nome sicuro per un file di nota (e per i [[link]])
     sanitize_filename(nome)   nome sicuro per un'immagine
     clean_alias(testo)        alias sicuro per [[nota|alias]]
+    section_heading(n, w, t)  titoletto di una sezione (es. "03 - Titolo"), a cui si puo' puntare con [[nota#titoletto]]
+    clean_tag(testo)          tag valido per Obsidian (senza # e senza spazi)
+    clean_tags(lista)         ripulisce una lista di tag: (validi senza doppioni, scartati)
     truncate_words(testo, n)  accorcia senza spezzare l'ultima parola
 """
 from __future__ import annotations
@@ -135,3 +138,60 @@ def sanitize_filename(name: str) -> str:
 def clean_alias(text: str) -> str:
     """Testo sicuro da usare come alias in [[nota|alias]]."""
     return re.sub(r"\s+", " ", re.sub(r"[\[\]|#^]", " ", text)).strip()
+
+
+# ----------------------------------------------------------------------------
+# Tag
+# ----------------------------------------------------------------------------
+
+_TAG_FORBIDDEN = re.compile(r"[^\w/-]+")
+
+
+def clean_tag(text: str) -> str:
+    """
+    Tag valido per Obsidian: niente '#', niente spazi (diventano '-'), solo lettere,
+    numeri, '_', '-' e '/' (per i tag annidati, es. 'libri/saggi').
+    Ritorna "" se non resta un tag valido (vuoto o senza nemmeno una lettera).
+    """
+    tag = text.strip().lstrip("#").strip()
+    tag = re.sub(r"\s+", "-", tag)
+    tag = _TAG_FORBIDDEN.sub("", tag)
+    tag = re.sub(r"/{2,}", "/", tag).strip("/-")
+    return tag if re.search(r"[^\W\d_]", tag) else ""
+
+
+def clean_tags(tags) -> tuple[list[str], list[str]]:
+    """Ripulisce una lista di tag. Ritorna (tag validi senza doppioni, testi scartati)."""
+    good: list[str] = []
+    dropped: list[str] = []
+    for raw in tags:
+        tag = clean_tag(raw)
+        if not tag:
+            if raw.strip():
+                dropped.append(raw.strip())
+        elif tag.lower() not in {g.lower() for g in good}:
+            good.append(tag)
+    return good, dropped
+
+
+# ----------------------------------------------------------------------------
+# Titoletti delle sezioni (quando piu' capitoli stanno nello stesso file)
+# ----------------------------------------------------------------------------
+
+_HEADING_STRIP = re.compile(r"[\[\]|#^*_~`$<>\\]|%%|==")
+
+
+def clean_heading(text: str) -> str:
+    """
+    Testo sicuro per un titoletto a cui punta un collegamento [[nota#titoletto]]:
+    Obsidian non accetta alcuni caratteri nei collegamenti ai titoletti (# | ^ : [ ] %%) e
+    altri verrebbero interpretati come formattazione (* _ ~ ` $ == < >).
+    """
+    text = re.sub(r"\s*:\s*", " - ", text)
+    text = _HEADING_STRIP.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip(" .-")
+
+
+def section_heading(number: int, width: int, title: str) -> str:
+    """Titoletto di una sezione: il numero del capitolo (rende unico il titoletto) + il titolo."""
+    return f"{number:0{width}d} - {truncate_words(clean_heading(title), 80) or 'Senza titolo'}"
