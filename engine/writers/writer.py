@@ -33,9 +33,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 from urllib.parse import quote
 
-from nav import (COPY, CSS_CLASS, CSS_FILE_NAME, CSS_TEXT, ORIGINAL, NavContext, Section, dress,
+from book_design.nav import (COPY, CSS_CLASS, CSS_FILE_NAME, CSS_TEXT, ORIGINAL, NavContext, Section, dress,
                  dress_sections)
-from sanitizer import clean_alias, escape_text, sanitize_name, section_heading
+from ..text_safety.sanitizer import clean_alias, escape_text, sanitize_name, section_heading
 
 if TYPE_CHECKING:  # solo per i tipi: a runtime eviterebbe un import circolare con il motore (engine/)
     from engine.engine_book_models import Book, BookMetadata, Chapter
@@ -74,7 +74,7 @@ def original_name(stem: str) -> str:
 
 def _render_index(meta: BookMetadata, chapters: list[Chapter], targets: list[str],
                   orig_targets: list[str], tags: tuple[str, ...] = (),
-                  with_originals: bool = True) -> str:
+                  with_originals: bool = True, checklist: bool = False) -> str:
     """L'indice e' l'UNICO file con i metadati del libro, ed e' il punto di ritorno
     sia dalle copie sia dagli originali."""
     lines = ["---", f"titolo: {yaml_str(meta.title)}"]
@@ -96,10 +96,14 @@ def _render_index(meta: BookMetadata, chapters: list[Chapter], targets: list[str
         lines.append("")
 
     lines += ["## Indice dei capitoli", ""]
+    if checklist:
+        # PROVA: con tutto il libro in un file l'indice serve anche a ricordare dove si e' arrivati
+        lines += ["Spunta ogni sezione quando l'hai letta: la prima casella vuota è dove riprendere.", ""]
     for i, chapter in enumerate(chapters):       # "targets" sono "file" oppure "file#titoletto"
         alias = clean_alias(chapter.title) or targets[i]
         original_link = f" · [[{orig_targets[i]}|originale]]" if with_originals else ""
-        lines.append(f"- [[{targets[i]}|{alias}]]{original_link}")
+        box = "[ ] " if checklist else ""
+        lines.append(f"- {box}[[{targets[i]}|{alias}]]{original_link}")
     return "\n".join(lines) + "\n"
 
 
@@ -282,7 +286,8 @@ def write_book(book: Book, out_dir: Path, overwrite_working: bool = False,
 
     kept += _write_working(out_dir / f"{index_stem}.md",
                            _render_index(book.metadata, book.chapters, copy_targets, orig_targets,
-                                         tags, with_originals),
+                                         tags, with_originals,
+                                         checklist=grouped and len(pages) == 1),
                            overwrite_working)
 
     style_path, in_vault = _install_style(out_dir)

@@ -32,7 +32,7 @@ import json
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from sanitizer import clean_alias
+from engine.text_safety.sanitizer import clean_alias
 
 COPY = "copia"
 ORIGINAL = "originale"

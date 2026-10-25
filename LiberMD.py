@@ -24,7 +24,7 @@ APP_VERSION = "0.1.0"
 
 def run(argv: Optional[list[str]] = None) -> int:
     """Avvia il programma. Ritorna il codice di uscita (0 = tutto ok)."""
-    from cli import main as cli_main
+    from ui.cli import main as cli_main
 
     args = sys.argv[1:] if argv is None else argv
 
