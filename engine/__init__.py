@@ -7,7 +7,9 @@ Dall'esterno basta importare da qui:
 
 I dettagli di ogni parte sono nei file della cartella (vedi engine_pipeline.py).
 """
+from .engine_book_models import BookMetadata
 from .engine_pipeline import convert
+from .engine_reader import read_epub_metadata
 from .engine_results import ConvertReport, EpubError
 
-__all__ = ["convert", "ConvertReport", "EpubError"]
+__all__ = ["convert", "read_epub_metadata", "BookMetadata", "ConvertReport", "EpubError"]
