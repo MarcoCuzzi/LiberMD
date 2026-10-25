@@ -29,7 +29,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from engine import EpubError, convert, read_epub_metadata
+from engine import EpubError, convert, log_error, read_epub_metadata
 
 
 def _split_tags(values: list[str]) -> list[str]:
@@ -108,6 +108,7 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
     try:
         meta = read_epub_metadata(args.epub)
     except EpubError as exc:
+        log_error(args.epub.name, str(exc))
         print(f"[!] ERRORE: {exc}", file=sys.stderr)
         return 1
 

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Callable, Optional
 
-from sanitizer import escape_line_start, escape_text, plain_title
+from .text_safety.sanitizer import escape_line_start, escape_text, plain_title
 
 
 HEADINGS = {"h1", "h2", "h3", "h4", "h5", "h6"}

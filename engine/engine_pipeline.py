@@ -32,10 +32,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Iterable, Optional, Union
 
-from sanitizer import clean_tags, sanitize_name
-from writer import ORIGINALS_DIR, write_book
+from .text_safety.sanitizer import clean_tags, sanitize_name
+from .writers.writer import ORIGINALS_DIR, write_book
 from .engine_book_models import BookMetadata
-from .engine_reader import read_epub
+from .engine_log import RunLog
+from .readers.engine_reader import read_epub
 from .engine_results import ConvertReport, ProgressCallback
 
 
@@ -73,40 +74,50 @@ def convert(
     """
     if group_size < 0:
         raise ValueError("group_size deve essere 1, 2, 3... oppure 0 (tutto in un file)")
-    progress = on_progress or (lambda msg: None)
     epub_path = Path(epub_path)
-
-    progress(f"Lettura di {epub_path.name}")
-    book = read_epub(epub_path, progress)
-    if metadata is not None:
-        book.metadata = replace(metadata, title=metadata.title.strip() or epub_path.stem)
-    page_tags, dropped = clean_tags(tags or [])
-    for text in dropped:
-        book.warnings.append(f"Tag scartato (non valido per Obsidian): {text}")
-
     out_dir = Path(out_base) / sanitize_name(epub_path.stem)
-    progress(f"Scrittura di {len(book.chapters)} capitoli (originali + copie di lavoro) in {out_dir}")
-    written = write_book(book, out_dir, overwrite_working, page_tags, nav_uri, vault_name,
-                          with_originals, group_size)
-    if nav_uri and not written.style_in_vault:
-        book.warnings.append(
-            "La cartella del libro non e' dentro un vault di Obsidian: i link Precedente/Successivo "
-            "usano solo il nome della nota" + ("" if vault_name else " e non il nome del vault (usa --vault)") + ".")
+    options = (f"raggruppa={'tutto' if group_size == 0 else group_size}, "
+               f"originali={'si' if with_originals else 'no'}, "
+               f"navigazione={'uri' if nav_uri else 'link'}, rigenera={'si' if overwrite_working else 'no'}")
+    log = RunLog(epub_path.name, out_dir, options)   # registro: vedi engine_log.py
+    progress = log.wrap(on_progress)
 
-    meta = book.metadata
-    return ConvertReport(
-        out_dir=out_dir,
-        originals_dir=out_dir / ORIGINALS_DIR if with_originals else None,
-        title=meta.title,
-        authors=meta.authors,
-        publisher=meta.publisher,
-        chapters=len(book.chapters),
-        images=len(book.media),
-        skipped_pages=book.skipped_pages,
-        warnings=book.warnings,
-        kept_existing=written.kept_existing,
-        style_path=written.style_path,
-        style_in_vault=written.style_in_vault,
-        tags=page_tags,
-        files=written.files,
-    )
+    try:
+        progress(f"Lettura di {epub_path.name}")
+        book = read_epub(epub_path, progress)
+        if metadata is not None:
+            book.metadata = replace(metadata, title=metadata.title.strip() or epub_path.stem)
+        page_tags, dropped = clean_tags(tags or [])
+        for text in dropped:
+            book.warnings.append(f"Tag scartato (non valido per Obsidian): {text}")
+
+        progress(f"Scrittura di {len(book.chapters)} capitoli (originali + copie di lavoro) in {out_dir}")
+        written = write_book(book, out_dir, overwrite_working, page_tags, nav_uri, vault_name,
+                              with_originals, group_size)
+        if nav_uri and not written.style_in_vault:
+            book.warnings.append(
+                "La cartella del libro non e' dentro un vault di Obsidian: i link Precedente/Successivo "
+                "usano solo il nome della nota" + ("" if vault_name else " e non il nome del vault (usa --vault)") + ".")
+
+        meta = book.metadata
+        report = ConvertReport(
+            out_dir=out_dir,
+            originals_dir=out_dir / ORIGINALS_DIR if with_originals else None,
+            title=meta.title,
+            authors=meta.authors,
+            publisher=meta.publisher,
+            chapters=len(book.chapters),
+            images=len(book.media),
+            skipped_pages=book.skipped_pages,
+            warnings=book.warnings,
+            kept_existing=written.kept_existing,
+            style_path=written.style_path,
+            style_in_vault=written.style_in_vault,
+            tags=page_tags,
+            files=written.files,
+        )
+    except Exception as exc:   # anche gli errori imprevisti finiscono nel registro
+        log.failed(exc)
+        raise
+    log.finished(report)
+    return report
