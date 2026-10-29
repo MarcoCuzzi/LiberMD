@@ -214,12 +214,12 @@ def _make_uri_maker(out_dir: Path, vault_name: Optional[str],
 def write_book(book: Book, out_dir: Path, overwrite_working: bool = False,
                tags: tuple[str, ...] | list[str] = (), nav_uri: bool = False,
                vault_name: Optional[str] = None, with_originals: bool = True,
-               group_size: int = 1) -> WriteResult:
+               group_size: int = 0) -> WriteResult:
     """Scrive originali + copie di lavoro + indice + immagini + stile.
     `tags` (gia' ripuliti) vengono aggiunti a tutte le pagine.
     `nav_uri`: i link Precedente/Successivo sono indirizzi obsidian:// (non compaiono nel grafo).
     `with_originals`: se False non si scrivono gli originali e non c'e' nessun collegamento ad essi.
-    `group_size`: capitoli per file (1 = uno per file, 0 = tutto in un solo file); con piu' capitoli
+    `group_size`: capitoli per file (0 = tutto in un solo file, default; 1 = uno per file); con piu' capitoli
     per file ognuno e' una sezione con il suo titoletto e i collegamenti puntano alla sezione."""
     tags = tuple(tags)
     title = book.metadata.title

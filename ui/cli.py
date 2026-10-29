@@ -11,7 +11,7 @@ chiede se confermarli (Invio) o cambiarli. Le domande si saltano con le opzioni 
 (per i dati che passi da riga di comando non chiede nulla) oppure con -y.
 
 Uso:
-    python LiberMD.py libro.epub
+    python LiberMD.py libro.epub               # crea il libro in tests/results/
     python LiberMD.py libro.epub -o /percorso/del/vault
     python LiberMD.py libro.epub --titolo "Il mio titolo" --autore "Nome Cognome"
     python LiberMD.py libro.epub --autore "Primo Autore" --autore "Secondo Autore"
@@ -19,8 +19,9 @@ Uso:
     python LiberMD.py libro.epub -y            # nessuna domanda: usa i dati trovati nel libro
     python LiberMD.py libro.epub --navigazione uri   # Precedente/Successivo fuori dal grafo
     python LiberMD.py libro.epub --senza-originali   # niente cartella originali/ ne' collegamenti
+    python LiberMD.py libro.epub --raggruppa 1       # un capitolo per file (invece del file unico)
     python LiberMD.py libro.epub --raggruppa 3       # 3 capitoli per file, ognuno come sezione
-    python LiberMD.py libro.epub --raggruppa tutto   # tutto il libro in un solo file
+    python LiberMD.py libro.epub --raggruppa tutto   # tutto il libro in un solo file (default)
     python LiberMD.py libro.epub -q
     python LiberMD.py libro.epub --force       # rigenera anche le copie di lavoro (perdi le tue note!)
 """
@@ -30,6 +31,9 @@ from pathlib import Path
 from typing import Optional
 
 from engine import EpubError, convert, log_error, read_epub_metadata
+
+# Cartella di destinazione predefinita: tests/results nella cartella del programma
+DEFAULT_OUT = Path(__file__).resolve().parents[1] / "tests" / "results"
 
 
 def _split_tags(values: list[str]) -> list[str]:
@@ -68,8 +72,9 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
     if version:
         parser.add_argument("--version", action="version", version=f"{prog} {version}")
     parser.add_argument("epub", type=Path, help="file .epub da convertire")
-    parser.add_argument("-o", "--out", type=Path, default=Path("."),
-                        help="cartella in cui creare la cartella del libro (default: cartella corrente)")
+    parser.add_argument("-o", "--out", type=Path, default=DEFAULT_OUT,
+                        help="cartella in cui creare la cartella del libro "
+                             "(default: tests/results nella cartella del programma)")
     parser.add_argument("--titolo", dest="title", default=None,
                         help="titolo del libro (default: quello trovato nell'EPUB)")
     parser.add_argument("--autore", dest="author", action="append", default=None,
@@ -87,10 +92,10 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
                              "del vault che contiene il libro)")
     parser.add_argument("--senza-originali", dest="no_originals", action="store_true",
                         help="non creare gli originali e nemmeno i collegamenti verso di essi")
-    parser.add_argument("--raggruppa", default="1", metavar="N|tutto",
-                        help="quanti capitoli mettere in ogni file (default 1: un capitolo per file); "
-                             "con 2 o piu' ogni capitolo diventa una sezione con il suo titoletto; "
-                             "'tutto' = tutto il libro in un solo file")
+    parser.add_argument("--raggruppa", default="tutto", metavar="N|tutto",
+                        help="quanti capitoli mettere in ogni file (default: 'tutto', cioe' tutto il libro "
+                             "in un solo file); 1 = un capitolo per file; con 2 o piu' ogni capitolo "
+                             "diventa una sezione con il suo titoletto")
     parser.add_argument("-y", "--yes", action="store_true",
                         help="non fare domande: usa i dati trovati nel libro e le opzioni indicate")
     parser.add_argument("-q", "--quiet", action="store_true",

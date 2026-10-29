@@ -27,3 +27,6 @@ tests/
 
 # Registro delle conversioni (si rigenera da solo)
 log/*.md
+
+# repomix
+repomix-output.xml
