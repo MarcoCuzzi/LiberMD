@@ -23,7 +23,8 @@ Thumbs.db
 
 # File di lavoro: EPUB di prova e libri convertiti
 *.epub
-tests/
+tests/**
+!tests/**/.gitkeep
 
 # Registro delle conversioni (si rigenera da solo)
 log/*.md
