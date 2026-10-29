@@ -32,8 +32,9 @@ Versione 0.1.0 · Nessuna libreria da installare · Tutta l'interfaccia è in it
 - Aggiunge a ogni pagina una **barra di navigazione** (Precedente · Indice · Originale · Successivo),
   le **proprietà** e i **tag**.
 - Installa uno **stile "libro"** per Obsidian.
-- Ti lascia decidere come deve essere fatto il risultato: capitoli raggruppati in un file solo,
-  originali sì o no, link che compaiono o no nel grafo, dati del libro corretti a mano, tag tuoi.
+- Di default mette **tutto il libro in un file solo**, da leggere di seguito, con ogni capitolo come sezione.
+- Ti lascia decidere il resto: un file per capitolo (o a gruppi), originali sì o no, link che compaiono
+  o no nel grafo, dati del libro corretti a mano, tag tuoi.
 
 Non cancella e non sovrascrive mai le tue note: le copie di lavoro già esistenti restano come sono,
 a meno che tu non lo chieda con `--force`.
@@ -58,8 +59,8 @@ Lanciato senza argomenti, mostra l'aiuto.
 ## Uso rapido
 
 ```
-python LiberMD.py libro.epub
-python LiberMD.py libro.epub -o "C:\Percorso\del\mio\vault"
+python LiberMD.py libro.epub                                  # il libro finisce in tests/results/
+python LiberMD.py libro.epub -o "C:\Percorso\del\mio\vault"   # il libro finisce nel tuo vault
 ```
 
 1. Il programma legge l'EPUB e ti mostra titolo, autore ed editore che ha trovato.
@@ -67,14 +68,32 @@ python LiberMD.py libro.epub -o "C:\Percorso\del\mio\vault"
 3. Ti chiede anche quali **tag** mettere su tutte le pagine (puoi lasciare vuoto).
 4. Converte il libro e scrive il riepilogo con le cartelle create.
 
+Se non indichi `-o`, il libro viene creato in `tests/results/`, dentro la cartella del programma. Per
+averlo nel tuo vault di Obsidian usa `-o` con la cartella del vault.
+
 Per non rispondere a nessuna domanda usa `-y`.
 
 ---
 
 ## Cosa viene creato
 
-Dentro la cartella indicata con `-o` (se manca, la cartella corrente) il programma crea una cartella
-con il **nome del file EPUB**:
+Dentro la cartella indicata con `-o` (se manca, `tests/results/` nella cartella del programma) il programma
+crea una cartella con il **nome del file EPUB**. Di default tutto il libro sta in **un solo file**:
+
+```
+nome-del-libro/
+├── 00 - Indice - Titolo del libro.md     indice con i dati e le caselle da spuntare
+├── 01 - Titolo del libro.md              copia di lavoro: tutto il libro, le tue note vanno qui
+├── media/                                immagini del libro (se ce ne sono)
+├── originali/                            testo intatto
+│   └── OR - 01 - Titolo del libro.md
+├── LiberMD - Log.md                      resoconto dell'ultima conversione
+└── LiberMD.css                           stile (vedi sotto dove viene messo)
+```
+
+Ogni capitolo è una **sezione** del file, con il suo titoletto e la sua barra di navigazione.
+
+Con `--raggruppa 1` si ottiene invece **un file per capitolo**:
 
 ```
 nome-del-libro/
@@ -82,19 +101,23 @@ nome-del-libro/
 ├── 01 - Primo capitolo.md                copie di lavoro: le tue note vanno qui
 ├── 02 - Secondo capitolo.md
 ├── ...
-├── media/                                immagini del libro
-├── originali/                            testo intatto di ogni capitolo
+├── media/
+├── originali/
 │   ├── OR - 01 - Primo capitolo.md
 │   └── ...
-└── LiberMD.css                           stile (vedi sotto dove viene messo)
+├── LiberMD - Log.md
+└── LiberMD.css
 ```
 
 - **Lo stile `LiberMD.css`**: se la cartella del libro sta dentro un vault di Obsidian (cioè in una cartella
   che ha `.obsidian` sopra di sé), il file viene messo in `.obsidian/snippets/`. Altrimenti resta
   accanto al libro e va copiato a mano in `<tuo vault>/.obsidian/snippets/`. Poi si attiva in Obsidian da
-  *Impostazioni → Aspetto → Frammenti CSS*.
-- Con `--raggruppa` i capitoli si uniscono in meno file; con `--senza-originali` la cartella `originali/` non
-  esiste. Vedi sotto.
+  *Impostazioni → Aspetto → Frammenti CSS*. La cartella predefinita `tests/results/` non è un vault, quindi
+  in quel caso lo stile resta accanto al libro. Per averlo subito al posto giusto, usa `-o` con il tuo vault.
+- `tests/results/` è pensata per le prove ed è esclusa da git (vedi `.gitignore`): i libri convertiti non
+  finiscono nel repository.
+- Con `--raggruppa N` i capitoli si uniscono in file da N capitoli; con `--senza-originali` la cartella
+  `originali/` non esiste. Vedi sotto.
 
 ---
 
@@ -107,12 +130,12 @@ python LiberMD.py EPUB [opzioni]
 | Opzione | Cosa fa | Default |
 |---|---|---|
 | `EPUB` | File `.epub` da convertire (obbligatorio) | |
-| `-o`, `--out CARTELLA` | Cartella in cui creare la cartella del libro | cartella corrente |
+| `-o`, `--out CARTELLA` | Cartella in cui creare la cartella del libro | `tests/results` nella cartella del programma |
 | `--titolo TITOLO` | Titolo del libro | quello trovato nell'EPUB |
 | `--autore AUTORE` | Autore; ripeti l'opzione per più autori | quelli trovati nell'EPUB |
 | `--editore EDITORE` | Editore | quello trovato nell'EPUB |
 | `--tag TAG` | Tag da mettere su tutte le pagine; ripeti l'opzione o separali con la virgola | nessuno |
-| `--raggruppa N` oppure `--raggruppa tutto` | Capitoli per file: `1` = uno per file, `3` = tre per file, `tutto` = tutto il libro in un solo file | `1` |
+| `--raggruppa N` oppure `--raggruppa tutto` | Capitoli per file: `tutto` = tutto il libro in un solo file, `1` = uno per file, `3` = tre per file | `tutto` |
 | `--senza-originali` | Non crea gli originali né i collegamenti verso di essi | originali presenti |
 | `--navigazione link` oppure `--navigazione uri` | Come sono fatti i link Precedente/Successivo (vedi sotto) | `link` |
 | `--vault NOME` | Nome del vault da usare nei link con `--navigazione uri` | cartella del vault che contiene il libro |
@@ -186,7 +209,7 @@ grafo e stile.
 
 ### Navigazione fra i capitoli
 
-In cima e in fondo a ogni pagina c'è una barra:
+In cima e in fondo a ogni pagina (nel file unico, di ogni sezione) c'è una barra:
 
 ```
 ← Precedente · Indice · Originale · Successivo →
@@ -214,17 +237,21 @@ con `--vault "Nome del vault"` indichi tu il nome.
 I collegamenti all'Indice e a Originale/La mia copia restano sempre normali: è giusto che il grafo mostri a
 quale libro appartiene un capitolo e quale originale corrisponde a quale copia.
 
-### Raggruppare i capitoli
+### File unico o più file
 
-Di norma ogni capitolo è un file. Con `--raggruppa` puoi unirne di più nello stesso file, per avere meno
-note nel grafo o per leggere di seguito.
+Di default tutto il libro è in **un solo file**, da leggere di seguito. Con `--raggruppa` scegli quanti
+capitoli mettere in ogni file:
 
 ```
+python LiberMD.py libro.epub                      # un file solo (default)
+python LiberMD.py libro.epub --raggruppa 1        # un capitolo per file
 python LiberMD.py libro.epub --raggruppa 3        # tre capitoli per file
-python LiberMD.py libro.epub --raggruppa tutto    # tutto il libro in un solo file
 ```
 
-Come è fatto un file con più capitoli:
+Un capitolo per file ha senso se preferisci note separate per capitolo, o se vuoi usare il grafo di
+Obsidian per muoverti fra i capitoli. Il prezzo è che le note nel vault diventano molte.
+
+Come è fatto un file con più capitoli (il file unico e `--raggruppa N` con N da 2 in su):
 
 - Ogni capitolo è una **sezione** con un titoletto di primo livello, per esempio `# 03 - Titolo del capitolo`.
   Il numero rende il titoletto unico anche se due capitoli hanno lo stesso titolo. Il titoletto c'è
@@ -238,19 +265,22 @@ Come è fatto un file con più capitoli:
 - Nel titoletto vengono tolti o sostituiti i caratteri che Obsidian non accetta nei collegamenti ai titoletti
   (`:` diventa ` - `, spariscono `#`, `|`, `^`, `[`, `]`, `*`, `_` e simili).
 
-**Nomi dei file raggruppati**
+Con `--raggruppa 1` ogni capitolo è un file a sé: niente titoletto aggiunto (resta il titolo del capitolo)
+e i collegamenti puntano direttamente al file.
+
+**Nomi dei file**
 
 | Modo | Esempio di nome |
 |---|---|
-| un capitolo per file (predefinito) | `01 - Titolo del capitolo` |
+| tutto in un solo file (predefinito) | `01 - Titolo del libro` |
+| un capitolo per file (`--raggruppa 1`) | `01 - Titolo del capitolo` |
 | N capitoli per file | `01 - Titolo del primo capitolo (1-3)`, `02 - Titolo (4-6)`, ... |
-| un solo file | `01 - Titolo del libro` |
 
 Se il numero richiesto è maggiore dei capitoli del libro, il risultato è un file unico.
 
 ### Dove sono arrivato: le caselle nell'indice
 
-Quando **tutto il libro sta in un solo file**, l'indice diventa un elenco con **caselle da spuntare**:
+Quando **tutto il libro sta in un solo file** (il default), l'indice diventa un elenco con **caselle da spuntare**:
 
 ```
 - [ ] Prefazione · originale
@@ -261,7 +291,7 @@ Spunti una sezione quando l'hai letta; la prima casella vuota è il punto da cui
 nella nota, quindi viaggia con la sincronizzazione delle note. L'indice non viene riscritto se rilanci il
 programma, quindi le caselle spuntate restano (con `--force` si perdono).
 
-Tiene traccia della sezione, non del paragrafo.
+Tiene traccia della sezione, non del paragrafo. Con `--raggruppa 1` l'indice è un elenco normale, senza caselle.
 
 ### Lo stile "libro"
 
@@ -295,10 +325,10 @@ numerati), citazioni, blocchi di codice e codice in linea, tabelle, righe orizzo
 ## Esempi pronti
 
 ```
-# Conversione standard in un vault, con le domande
-python LiberMD.py libro.epub -o "C:\Vault\Libri"
+# Conversione standard: un file solo, in tests/results, con le domande
+python LiberMD.py libro.epub
 
-# Nessuna domanda, tutto automatico
+# Direttamente nel tuo vault, senza domande
 python LiberMD.py libro.epub -o "C:\Vault\Libri" -y
 
 # I dati dell'EPUB sono sbagliati: li indico io
@@ -307,20 +337,20 @@ python LiberMD.py libro.epub --titolo "Opere complete" --autore "Epitteto" --edi
 # Due autori e dei tag
 python LiberMD.py libro.epub --autore "Primo Autore" --autore "Secondo Autore" --tag saggio --tag "da leggere"
 
-# Libro letto di seguito, in un file solo, con le caselle per ritrovare il punto
-python LiberMD.py libro.epub --raggruppa tutto
+# Un file solo, senza gli originali (meno file e meno collegamenti)
+python LiberMD.py libro.epub --senza-originali
 
-# Come sopra, senza gli originali (meno file e meno collegamenti)
-python LiberMD.py libro.epub --raggruppa tutto --senza-originali
+# Un capitolo per file, invece del file unico
+python LiberMD.py libro.epub --raggruppa 1
 
 # Libro con moltissime pagine piccole: cinque capitoli per file
 python LiberMD.py libro.epub --raggruppa 5
 
-# Grafo più pulito: Precedente/Successivo non compaiono nel grafo
-python LiberMD.py libro.epub --navigazione uri
+# Con un file per capitolo, Precedente/Successivo non compaiono nel grafo
+python LiberMD.py libro.epub --raggruppa 1 --navigazione uri
 
 # Come sopra, indicando il nome del vault
-python LiberMD.py libro.epub --navigazione uri --vault "Il mio vault"
+python LiberMD.py libro.epub --raggruppa 1 --navigazione uri --vault "Il mio vault"
 
 # Rigenera anche le copie di lavoro (perdi le note scritte in quelle esistenti!)
 python LiberMD.py libro.epub --force
@@ -334,8 +364,9 @@ python LiberMD.py libro.epub --force
 modificato il file, usa l'icona di aggiornamento accanto alla cartella dei frammenti. L'icona della cartella
 apre direttamente quella dei frammenti nel gestore file.
 
-**Il grafo.** Ogni capitolo punta all'indice, e con molte pagine il grafo diventa un gomitolo. Nelle
-impostazioni del grafo scrivi nel campo di ricerca:
+**Il grafo.** Con il file unico il grafo resta piccolo. Con un capitolo per file (`--raggruppa 1`) ogni
+capitolo punta all'indice, e con molte pagine il grafo diventa un gomitolo. Nelle impostazioni del grafo
+scrivi nel campo di ricerca:
 
 ```
 tag:#tipo/pagina                          tutte le pagine dei capitoli, senza l'indice
@@ -364,7 +395,7 @@ proprietà restano, ma non occupano spazio in cima alle pagine.
 - **Hai già scritto note**: le copie di lavoro e l'indice non vengono riscritti, quindi i nuovi tag, le nuove
   proprietà e i nuovi nomi non compaiono. Puoi convertire in un'altra cartella e riportare a mano le note, oppure
   usare `--force` sapendo che sovrascrive le copie e l'indice. Gli **originali** si aggiornano sempre.
-- **Cambi modalità** (per esempio da un capitolo per file a `--raggruppa tutto`) nella stessa cartella: i
+- **Cambi modalità** (per esempio dal file unico a `--raggruppa 1`) nella stessa cartella: i
   file della modalità precedente restano accanto ai nuovi, perché il programma non cancella nulla. Per
   cambiare modalità conviene una cartella nuova.
 - **Stile aggiornato**: cancella `LiberMD.css` e rilancia.
@@ -376,11 +407,15 @@ proprietà restano, ma non occupano spazio in cima alle pagine.
 - I **link presenti nel testo del libro** (sia esterni sia interni) diventano testo semplice: l'indirizzo
   si perde. Note a piè di pagina e rimandi fra capitoli non diventano collegamenti.
 - I **capitoli** sono le sezioni dell'EPUB, non il suo sommario ufficiale. Un capitolo diviso dall'editore in più
-  file XHTML diventa più capitoli, e certi libri hanno molte pagine minuscole: in quel caso aiuta `--raggruppa`.
+  file XHTML diventa più capitoli, e certi libri hanno molte pagine minuscole (per esempio gli EPUB ricavati da scansioni OCR): il file unico
+  le tiene insieme, ma il libro risulta fatto di moltissime sezioni.
 - Apici e pedici (`<sup>`, `<sub>`) restano scritti in HTML.
-- Nello stesso vault, i **capitoli** di libri diversi possono avere lo stesso nome (`01 - Introduzione`).
-  Indice e proprietà `libro` hanno nomi unici, i capitoli no, e Obsidian potrebbe confondere i collegamenti
-  tra libri diversi.
+- Con `--raggruppa 1` (o N), nello stesso vault i **capitoli** di libri diversi possono avere lo stesso nome
+  (`01 - Introduzione`). Indice e proprietà `libro` hanno nomi unici, i capitoli no, e Obsidian potrebbe
+  confondere i collegamenti tra libri diversi. Con il file unico il nome contiene il titolo del libro, quindi
+  di norma il problema non c'è.
+- Nel file unico ogni sezione ha le sue due barre di navigazione: con molte sezioni piccole il testo risulta
+  interrotto di continuo.
 - Nella modalità `--navigazione uri`, il collegamento a un titoletto di una sezione dipende da come Obsidian
   interpreta l'indirizzo: se non funziona, usa `--navigazione link`.
 - Non ci sono test automatici: il programma è stato provato con EPUB di prova.
@@ -415,6 +450,7 @@ from pathlib import Path
 from engine import convert, read_epub_metadata, EpubError
 
 meta = read_epub_metadata(Path("libro.epub"))        # solo titolo, autori, editore
-report = convert("libro.epub", out_base="vault", tags=["saggio"], group_size=0)
+report = convert("libro.epub", out_base="vault", tags=["saggio"])                  # file unico (default)
+report = convert("libro.epub", out_base="vault", tags=["saggio"], group_size=1)    # un capitolo per file
 print(report.out_dir, report.chapters)
 ```

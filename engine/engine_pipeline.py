@@ -50,7 +50,7 @@ def convert(
     nav_uri: bool = False,
     vault_name: Optional[str] = None,
     with_originals: bool = True,
-    group_size: int = 1,
+    group_size: int = 0,
 ) -> ConvertReport:
     """
     Converte un EPUB in una cartella con due versioni dei capitoli.
@@ -67,8 +67,8 @@ def convert(
     vault_name         nome del vault da usare in quei link (default: la cartella del vault
                        che contiene il libro)
     with_originals     se False, non crea la cartella originali/ ne' i collegamenti agli originali
-    group_size         capitoli per file: 1 = uno per file (default), N = N capitoli per file, ognuno
-                       come sezione con il suo titoletto; 0 = tutto il libro in un solo file
+    group_size         capitoli per file: 0 = tutto il libro in un solo file (default), 1 = uno per
+                       file, N = N capitoli per file, ognuno come sezione con il suo titoletto
 
     Solleva EpubError se il file non e' leggibile o non contiene testo.
     """
