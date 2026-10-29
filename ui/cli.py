@@ -22,6 +22,10 @@ Uso:
     python LiberMD.py libro.epub --raggruppa 1       # un capitolo per file (invece del file unico)
     python LiberMD.py libro.epub --raggruppa 3       # 3 capitoli per file, ognuno come sezione
     python LiberMD.py libro.epub --raggruppa tutto   # tutto il libro in un solo file (default)
+    python LiberMD.py libro.epub --barre una         # una sola barra per sezione (sopra)
+    python LiberMD.py libro.epub --barre nessuna     # nessuna barra tra le sezioni, una sola in cima al file
+    python LiberMD.py libro.epub --unisci 15000      # fondi le sezioni piccole fino a ~15000 caratteri
+    python LiberMD.py libro.epub --unisci no         # non fondere mai (default: automatico sulle scansioni)
     python LiberMD.py libro.epub -q
     python LiberMD.py libro.epub --force       # rigenera anche le copie di lavoro (perdi le tue note!)
 """
@@ -30,7 +34,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from engine import EpubError, convert, log_error, read_epub_metadata
+from engine import EpubError, convert, log_error, read_epub_metadata   # prima di book_design: evita un import circolare
+from book_design.nav import BARS_ALL, BARS_CHOICES
 
 # Cartella di destinazione predefinita: tests/results nella cartella del programma
 DEFAULT_OUT = Path(__file__).resolve().parents[1] / "tests" / "results"
@@ -52,6 +57,16 @@ def _parse_group(value: str) -> Optional[int]:
     if value in ("tutto", "tutti"):
         return 0
     return int(value) if value.isdigit() and int(value) >= 1 else None
+
+
+def _parse_merge(value: str) -> Optional[int]:
+    """--unisci: "auto" (None), "no" (0) oppure un numero di caratteri. -1 se non e' valido."""
+    value = value.strip().lower()
+    if value in ("auto", "automatico"):
+        return None
+    if value in ("no", "mai", "0"):
+        return 0
+    return int(value) if value.isdigit() else -1
 
 
 def _ask(label: str, default: str, empty: str = "non trovato") -> str:
@@ -96,6 +111,14 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
                         help="quanti capitoli mettere in ogni file (default: 'tutto', cioe' tutto il libro "
                              "in un solo file); 1 = un capitolo per file; con 2 o piu' ogni capitolo "
                              "diventa una sezione con il suo titoletto")
+    parser.add_argument("--barre", choices=BARS_CHOICES, default=BARS_ALL,
+                        help="barre di navigazione per ogni sezione: 'tutte' = sopra e sotto (default); "
+                             "'una' = solo sopra; 'nessuna' = nessuna tra le sezioni, una sola in cima al "
+                             "file (con un capitolo per file vale come 'una')")
+    parser.add_argument("--unisci", default="auto", metavar="auto|no|N",
+                        help="fonde le sezioni piccole: 'auto' (default) agisce solo se il libro sembra una "
+                             "scansione a pagine (centinaia di sezioni minuscole); 'no' non fonde mai; "
+                             "un numero N fonde finche' ogni sezione ha almeno N caratteri (es. 12000)")
     parser.add_argument("-y", "--yes", action="store_true",
                         help="non fare domande: usa i dati trovati nel libro e le opzioni indicate")
     parser.add_argument("-q", "--quiet", action="store_true",
@@ -106,6 +129,10 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
     group_size = _parse_group(args.raggruppa)
     if group_size is None:
         parser.error("--raggruppa vuole un numero (1, 2, 3...) oppure 'tutto'")
+
+    merge_min = _parse_merge(args.unisci)
+    if merge_min == -1:
+        parser.error("--unisci vuole 'auto', 'no' oppure un numero di caratteri")
 
     progress = None if args.quiet else (lambda msg: print(f"--> {msg}"))
 
@@ -152,7 +179,8 @@ def main(argv: Optional[list[str]] = None, prog: str = "LiberMD",
         report = convert(args.epub, args.out, on_progress=progress,
                          overwrite_working=args.force, metadata=meta, tags=tags,
                          nav_uri=(args.nav == "uri"), vault_name=args.vault,
-                         with_originals=not args.no_originals, group_size=group_size)
+                         with_originals=not args.no_originals, group_size=group_size,
+                         bars=args.barre, merge_min=merge_min)
     except EpubError as exc:
         print(f"[!] ERRORE: {exc}", file=sys.stderr)
         return 1

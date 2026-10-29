@@ -289,7 +289,8 @@ def read_epub(epub_path: Path, progress: ProgressCallback = lambda msg: None) ->
                     title = "Copertina" if n == 1 else f"Immagine {n}"
                 else:
                     title = f"Sezione {n}"
-                chapters.append(Chapter(title=title or f"Sezione {n}", markdown=result.markdown))
+                chapters.append(Chapter(title=title or f"Sezione {n}", markdown=result.markdown,
+                                        has_heading=bool(result.first_heading), first_page=n, last_page=n))
 
     if not chapters:
         raise EpubError("Nessun contenuto estratto. Il libro potrebbe avere DRM o essere solo immagini.")

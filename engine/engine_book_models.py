@@ -26,6 +26,9 @@ class BookMetadata:
 class Chapter:
     title: str
     markdown: str
+    has_heading: bool = True      # False: il titolo e' ricavato dal testo (tipico delle scansioni OCR)
+    first_page: int = 0           # numero della sezione dell'EPUB da cui nasce (serve a nominare le fusioni)
+    last_page: int = 0
 
 
 @dataclass

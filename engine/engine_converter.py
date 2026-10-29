@@ -34,6 +34,14 @@ MARKERS = {
     "s": "~~", "strike": "~~", "del": "~~",
     "code": "`",
 }
+_FN_TYPES = {"footnote", "endnote", "rearnote"}
+_REF_TYPES = {"noteref", "doc-noteref"}
+
+
+def _normalize_fn_key(key: str) -> str:
+    """Pulisce l'identificatore per Obsidian [^id]."""
+    clean = re.sub(r"[^\w\-.]", "", key.strip("#"))
+    return clean or "fn"
 
 
 @dataclass
@@ -71,6 +79,13 @@ class MarkdownConverter(HTMLParser):
         self.in_pre = False
         self.pre_buf: list[str] = []
 
+        # Note a pie' di pagina
+        self.in_sup = False
+        self.current_a: Optional[dict] = None
+        self.fn_capturing_id: Optional[str] = None
+        self.fn_depth = 0
+        self.footnotes: dict[str, list[str]] = {}
+
         self.table_depth = 0
         self.rows: list[list[str]] = []
         self.row: Optional[list[str]] = None
@@ -89,6 +104,24 @@ class MarkdownConverter(HTMLParser):
         if self.ignore_depth:
             return
         attrs = dict(attrs)
+        elem_id = attrs.get("id") or attrs.get("name")
+        epub_type = attrs.get("epub:type", "").lower()
+        cls = attrs.get("class", "").lower()
+
+        # Rilevamento inizio blocco nota a pie' di pagina
+        is_fn_container = (
+            any(t in epub_type for t in _FN_TYPES) or
+            any(c in cls for c in ("footnote", "endnote")) or
+            (tag == "aside" and bool(elem_id))
+        )
+        if is_fn_container and elem_id and not self.fn_capturing_id:
+            self._flush()
+            self.fn_capturing_id = _normalize_fn_key(elem_id)
+            self.fn_depth = 1
+            self.footnotes.setdefault(self.fn_capturing_id, [])
+            return
+        elif self.fn_capturing_id:
+            self.fn_depth += 1
 
         if self.in_pre:
             if tag == "br":
@@ -131,6 +164,21 @@ class MarkdownConverter(HTMLParser):
         elif tag == "blockquote":
             self._flush()
             self.quote_depth += 1
+        elif tag == "sup":
+            self.in_sup = True
+        elif tag == "a":
+            href = attrs.get("href", "")
+            is_ref = (
+                any(t in epub_type for t in _REF_TYPES) or
+                "noteref" in cls or
+                "footnote" in cls or
+                (self.in_sup and href.startswith("#"))
+            )
+            self.current_a = {
+                "href": href,
+                "is_ref": is_ref,
+                "text": []
+            }
         elif tag == "pre":
             self._flush()
             self.in_pre = True
@@ -166,6 +214,13 @@ class MarkdownConverter(HTMLParser):
         if self.ignore_depth:
             return
 
+        if self.fn_capturing_id:
+            self.fn_depth -= 1
+            if self.fn_depth == 0:
+                self._flush()
+                self.fn_capturing_id = None
+                return
+
         if self.in_pre:
             if tag == "pre":
                 self._end_pre()
@@ -188,6 +243,21 @@ class MarkdownConverter(HTMLParser):
         elif tag == "blockquote":
             self._flush()
             self.quote_depth = max(0, self.quote_depth - 1)
+        elif tag == "sup":
+            self.in_sup = False
+        elif tag == "a":
+            if self.current_a:
+                text = "".join(self.current_a["text"]).strip()
+                href = self.current_a["href"]
+                if self.current_a["is_ref"] and href.startswith("#"):
+                    target_id = _normalize_fn_key(href)
+                    self.buf.append(f"[^{target_id}]")
+                elif href.startswith("#") and text.isdigit():
+                    target_id = _normalize_fn_key(href)
+                    self.buf.append(f"[^{target_id}]")
+                else:
+                    self.buf.append(escape_text(text) if not self.code_depth else text)
+                self.current_a = None
         elif tag in ("td", "th"):
             self._end_cell()
         elif tag == "tr":
@@ -213,6 +283,9 @@ class MarkdownConverter(HTMLParser):
         data = data.replace("\xad", "").replace("\u200b", "")  # trattino morbido, spazio zero
         data = re.sub(r"\s+", " ", data)  # gli a capo del sorgente HTML NON sono a capo
         if data:
+            if self.current_a is not None:
+                self.current_a["text"].append(data)
+                return
             # Il testo e' TESTO: i caratteri speciali di Markdown/Obsidian vengono neutralizzati.
             # (Il Markdown generato dal convertitore, es. ** o ![](), non passa di qui.)
             self.buf.append(data if self.code_depth else escape_text(data))
@@ -286,6 +359,12 @@ class MarkdownConverter(HTMLParser):
         text = self._tidy(self._render_inline(self.buf))
         self.buf = []
         if not text:
+            return
+
+        if self.fn_capturing_id:
+            clean_note = re.sub(r"\s*\\?[↩\^]\s*$", "", text).strip()
+            if clean_note:
+                self.footnotes[self.fn_capturing_id].append(clean_note)
             return
 
         if self.heading_level:
@@ -403,6 +482,19 @@ class MarkdownConverter(HTMLParser):
                 parts.append(sep)
             parts.append(text)
             prev_kind, prev_quote = kind, quote
+
+        if self.footnotes:
+            fn_lines = ["\n\n---"]
+            for fn_id, paragraphs in self.footnotes.items():
+                if not paragraphs:
+                    continue
+                first = paragraphs[0]
+                rest = paragraphs[1:]
+                fn_lines.append(f"[^{fn_id}]: {first}")
+                for p in rest:
+                    fn_lines.append(f"    {p}")
+            parts.append("\n".join(fn_lines))
+
         return "".join(parts).strip()
 
     def result(self) -> ConversionResult:

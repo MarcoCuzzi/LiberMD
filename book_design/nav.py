@@ -44,6 +44,12 @@ CSS_FILE_NAME = "LiberMD.css"
 PAGE_TAG = "tipo/pagina"            # tag di tutte le pagine dei capitoli (NON dell'indice): per filtrare il grafo
 ORIGINAL_TAG = "tipo/originale"     # tag che distingue le pagine originali (per filtrarle)
 
+# Quante barre di navigazione mettere (opzione --barre)
+BARS_ALL = "tutte"       # sopra e sotto ogni sezione
+BARS_ONE = "una"         # solo sopra ogni sezione
+BARS_NONE = "nessuna"    # nessuna barra tra le sezioni: una sola in cima al file (Indice, Originale, file vicini)
+BARS_CHOICES = (BARS_ALL, BARS_ONE, BARS_NONE)
+
 
 @dataclass
 class NavContext:
@@ -67,15 +73,19 @@ def _step_link(ctx: NavContext, stem: str, label: str) -> str:
     return f"[[{stem}|{label}]]"
 
 
-def nav_bar(ctx: NavContext) -> str:
-    """La riga di navigazione, scritta come callout di Obsidian."""
+def nav_bar(ctx: NavContext, compact: bool = False) -> str:
+    """La riga di navigazione, scritta come callout di Obsidian.
+    `compact`: senza Precedente/Successivo quando non ci sono (barra di un file unico)."""
     prev_link = _step_link(ctx, ctx.prev_stem, "← Precedente") if ctx.prev_stem else "← Inizio"
     next_link = _step_link(ctx, ctx.next_stem, "Successivo →") if ctx.next_stem else "Fine →"
     parts = [prev_link, f"[[{ctx.index_stem}|Indice]]"]
+    if compact and not ctx.prev_stem:
+        parts = parts[1:]
     if ctx.other_stem:                     # senza originali non c'e' il collegamento all'altra versione
         other_label = "La mia copia" if ctx.kind == ORIGINAL else "Originale"
         parts.append(f"[[{ctx.other_stem}|{other_label}]]")
-    parts.append(next_link)
+    if not (compact and not ctx.next_stem):
+        parts.append(next_link)
     return f"> [!{NAV_CALLOUT}] " + " · ".join(parts)
 
 
@@ -106,11 +116,13 @@ def frontmatter(ctx: NavContext) -> str:
     return "\n".join(lines) + "\n"
 
 
-def dress(markdown: str, ctx: NavContext) -> str:
-    """Testo di un capitolo -> contenuto completo del file."""
+def dress(markdown: str, ctx: NavContext, bars: str = BARS_ALL) -> str:
+    """Testo di un capitolo -> contenuto completo del file.
+    Con un capitolo per file la barra in cima serve sempre: "nessuna" vale come "una"."""
     bar = nav_bar(ctx)
     notice = original_notice(ctx) if ctx.kind == ORIGINAL else ""
-    return f"{frontmatter(ctx)}\n{bar}\n\n{notice}{markdown}\n\n{bar}\n"
+    bottom = f"\n\n{bar}" if bars == BARS_ALL else ""
+    return f"{frontmatter(ctx)}\n{bar}\n\n{notice}{markdown}{bottom}\n"
 
 
 # ----------------------------------------------------------------------------
@@ -209,6 +221,19 @@ CSS_TEXT = """\
 .libermd-originale .callout[data-callout="warning"] {
   --callout-color: 230, 180, 0;           /* giallo ambra */
 }
+
+/* ---- Segnalibri transclusi (nasconde titolo e bordi) ----------------- */
+
+.internal-embed:has(.no-embed-header) {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 1.2em 0 !important;
+}
+
+.internal-embed:has(.no-embed-header) .embed-title {
+  display: none !important;
+}
 """
 
 
@@ -220,15 +245,22 @@ class Section:
     ctx: NavContext     # navigazione di QUESTA sezione (i nomi possono contenere "#titoletto")
 
 
-def dress_sections(sections: list[Section]) -> str:
+def dress_sections(sections: list[Section], bars: str = BARS_ALL,
+                   file_ctx: Optional[NavContext] = None) -> str:
     """
-    Piu' capitoli nello stesso file: ognuno con il suo titoletto e la sua barra di navigazione
-    (sopra e sotto), separati da una riga. Proprieta' e avviso compaiono una sola volta, in cima.
+    Piu' capitoli nello stesso file: ognuno con il suo titoletto e, secondo `bars`, la sua barra di
+    navigazione (sopra e sotto / solo sopra / nessuna), separati da una riga. Proprieta' e avviso
+    compaiono una sola volta, in cima.
+    Con bars="nessuna" l'unica barra e' quella in cima al file (`file_ctx`: Indice, versione
+    opposta e, se il libro e' in piu' file, file precedente e successivo).
     """
     first = sections[0].ctx
     notice = original_notice(first) if first.kind == ORIGINAL else ""
+    head = f"{nav_bar(file_ctx, compact=True)}\n\n" if bars == BARS_NONE and file_ctx else ""
     blocks = []
     for section in sections:
         bar = nav_bar(section.ctx)
-        blocks.append(f"# {section.heading}\n\n{bar}\n\n{section.markdown}\n\n{bar}")
-    return f"{frontmatter(first)}\n{notice}" + "\n\n---\n\n".join(blocks) + "\n"
+        top = f"{bar}\n\n" if bars != BARS_NONE else ""
+        bottom = f"\n\n{bar}" if bars == BARS_ALL else ""
+        blocks.append(f"# {section.heading}\n\n{top}{section.markdown}{bottom}")
+    return f"{frontmatter(first)}\n{head}{notice}" + "\n\n---\n\n".join(blocks) + "\n"

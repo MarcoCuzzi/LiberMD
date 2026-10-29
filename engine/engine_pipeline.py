@@ -36,7 +36,9 @@ from .text_safety.sanitizer import clean_tags, sanitize_name
 from .writers.writer import ORIGINALS_DIR, write_book
 from .engine_book_models import BookMetadata
 from .engine_log import RunLog
+from book_design.nav import BARS_ALL, BARS_CHOICES
 from .readers.engine_reader import read_epub
+from .readers.merge import merge_chapters
 from .engine_results import ConvertReport, ProgressCallback
 
 
@@ -51,6 +53,8 @@ def convert(
     vault_name: Optional[str] = None,
     with_originals: bool = True,
     group_size: int = 0,
+    bars: str = BARS_ALL,
+    merge_min: Optional[int] = None,
 ) -> ConvertReport:
     """
     Converte un EPUB in una cartella con due versioni dei capitoli.
@@ -70,14 +74,24 @@ def convert(
     group_size         capitoli per file: 0 = tutto il libro in un solo file (default), 1 = uno per
                        file, N = N capitoli per file, ognuno come sezione con il suo titoletto
 
+    bars               barre di navigazione per sezione: "tutte" (sopra e sotto, default), "una" (solo
+                       sopra), "nessuna" (solo una in cima al file)
+    merge_min          fusione delle sezioni piccole: None = automatica (solo se il libro sembra una
+                       scansione a pagine), 0 = mai, N = fondi fino ad avere almeno N caratteri
+
     Solleva EpubError se il file non e' leggibile o non contiene testo.
     """
     if group_size < 0:
         raise ValueError("group_size deve essere 1, 2, 3... oppure 0 (tutto in un file)")
+    if bars not in BARS_CHOICES:
+        raise ValueError(f"bars deve essere uno tra: {', '.join(BARS_CHOICES)}")
+    if merge_min is not None and merge_min < 0:
+        raise ValueError("merge_min deve essere None, 0 (mai) o un numero di caratteri")
     epub_path = Path(epub_path)
     out_dir = Path(out_base) / sanitize_name(epub_path.stem)
     options = (f"raggruppa={'tutto' if group_size == 0 else group_size}, "
                f"originali={'si' if with_originals else 'no'}, "
+               f"barre={bars}, unisci={'auto' if merge_min is None else merge_min}, "
                f"navigazione={'uri' if nav_uri else 'link'}, rigenera={'si' if overwrite_working else 'no'}")
     log = RunLog(epub_path.name, out_dir, options)   # registro: vedi engine_log.py
     progress = log.wrap(on_progress)
@@ -85,6 +99,9 @@ def convert(
     try:
         progress(f"Lettura di {epub_path.name}")
         book = read_epub(epub_path, progress)
+        book.chapters, merge_note = merge_chapters(book.chapters, merge_min)
+        if merge_note:
+            progress(merge_note)
         if metadata is not None:
             book.metadata = replace(metadata, title=metadata.title.strip() or epub_path.stem)
         page_tags, dropped = clean_tags(tags or [])
@@ -93,7 +110,7 @@ def convert(
 
         progress(f"Scrittura di {len(book.chapters)} capitoli (originali + copie di lavoro) in {out_dir}")
         written = write_book(book, out_dir, overwrite_working, page_tags, nav_uri, vault_name,
-                              with_originals, group_size)
+                              with_originals, group_size, bars)
         if nav_uri and not written.style_in_vault:
             book.warnings.append(
                 "La cartella del libro non e' dentro un vault di Obsidian: i link Precedente/Successivo "

@@ -9,32 +9,28 @@ e non converte nulla. L'aspetto delle pagine (barre di navigazione, stile) e' di
     Libro/
       00 - Indice - Titolo.md      indice con i metadati e i collegamenti (modificabile)
       01 - Titolo.md  ...          copie di LAVORO: quelle su cui scrivi
+      Guida-LiberMD.md             guida al metodo di lettura
+      bookmarks/                   copia della cartella guide/bookmarks/ (immagini + note)
+        bookmark.md                nota da includere con ![[bookmark]]
+        info_bookmarks.md          istruzioni di scelta
       originali/
         OR - 01 - Titolo.md  ...   ORIGINALI: il testo intatto (con un avviso in cima)
-      media/                       immagini, condivise dalle due versioni
+      media/                       immagini estratte dall'EPUB
 
 Il nome dell'originale e' sempre "OR - " + nome della copia di lavoro.
-
-Regole di scrittura:
-    - gli ORIGINALI si rigenerano sempre (sono identici) e NON sono bloccati: se ne rovini
-      uno, basta rilanciare il programma;
-    - con "senza originali" la cartella originali/ non viene creata e spariscono tutti i collegamenti
-      agli originali; quelli gia' presenti da conversioni precedenti non vengono cancellati;
-    - le copie di LAVORO gia' esistenti NON si toccano (potrebbero contenere le tue note),
-      a meno che non si chieda esplicitamente di sovrascriverle;
-    - lo STILE (LiberMD.css) non si sovrascrive se esiste: potresti averlo personalizzato.
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 from urllib.parse import quote
 
-from book_design.nav import (COPY, CSS_CLASS, CSS_FILE_NAME, CSS_TEXT, ORIGINAL, NavContext, Section, dress,
-                 dress_sections)
+from book_design.nav import (BARS_ALL, COPY, CSS_CLASS, CSS_FILE_NAME, CSS_TEXT, ORIGINAL, NavContext, Section,
+                 dress, dress_sections)
 from ..text_safety.sanitizer import clean_alias, escape_text, sanitize_name, section_heading
 
 if TYPE_CHECKING:  # solo per i tipi: a runtime eviterebbe un import circolare con il motore (engine/)
@@ -43,6 +39,7 @@ if TYPE_CHECKING:  # solo per i tipi: a runtime eviterebbe un import circolare c
 INDEX_PREFIX = "00 - Indice"
 ORIGINALS_DIR = "originali"
 ORIGINAL_PREFIX = "OR - "
+GUIDE_DIR_SRC = Path(__file__).resolve().parents[2] / "guide"
 
 
 @dataclass
@@ -97,13 +94,18 @@ def _render_index(meta: BookMetadata, chapters: list[Chapter], targets: list[str
 
     lines += ["## Indice dei capitoli", ""]
     if checklist:
-        # PROVA: con tutto il libro in un file l'indice serve anche a ricordare dove si e' arrivati
         lines += ["Spunta ogni sezione quando l'hai letta: la prima casella vuota è dove riprendere.", ""]
     for i, chapter in enumerate(chapters):       # "targets" sono "file" oppure "file#titoletto"
         alias = clean_alias(chapter.title) or targets[i]
         original_link = f" · [[{orig_targets[i]}|originale]]" if with_originals else ""
         box = "[ ] " if checklist else ""
         lines.append(f"- {box}[[{targets[i]}|{alias}]]{original_link}")
+
+    # Risorse di lettura
+    lines += ["", "---", "## Strumenti di lettura", ""]
+    lines.append("- [[Guida-LiberMD|Guida alla lettura]]")
+    lines.append("- [[info_bookmarks|Istruzioni Segnalibri]]")
+
     return "\n".join(lines) + "\n"
 
 
@@ -151,6 +153,26 @@ def _install_style(out_dir: Path) -> tuple[Path, bool]:
     if not path.exists():
         path.write_text(CSS_TEXT, encoding="utf-8")
     return path, in_vault
+
+
+def _copy_guides_and_bookmarks(out_dir: Path) -> None:
+    """Copia Guida-LiberMD.md e l'intera cartella bookmarks/ nel libro."""
+    if not GUIDE_DIR_SRC.is_dir():
+        return
+
+    # 1. Copia Guida-LiberMD.md
+    guide_file = GUIDE_DIR_SRC / "Guida-LiberMD.md"
+    if guide_file.is_file():
+        dst_guide = out_dir / "Guida-LiberMD.md"
+        if not dst_guide.exists():
+            shutil.copy2(guide_file, dst_guide)
+
+    # 2. Copia intera cartella bookmarks/
+    bm_src_dir = GUIDE_DIR_SRC / "bookmarks"
+    if bm_src_dir.is_dir():
+        dst_bm_dir = out_dir / "bookmarks"
+        if not dst_bm_dir.exists():
+            shutil.copytree(bm_src_dir, dst_bm_dir)
 
 
 @dataclass
@@ -214,13 +236,15 @@ def _make_uri_maker(out_dir: Path, vault_name: Optional[str],
 def write_book(book: Book, out_dir: Path, overwrite_working: bool = False,
                tags: tuple[str, ...] | list[str] = (), nav_uri: bool = False,
                vault_name: Optional[str] = None, with_originals: bool = True,
-               group_size: int = 0) -> WriteResult:
+               group_size: int = 0, bars: str = BARS_ALL) -> WriteResult:
     """Scrive originali + copie di lavoro + indice + immagini + stile.
     `tags` (gia' ripuliti) vengono aggiunti a tutte le pagine.
     `nav_uri`: i link Precedente/Successivo sono indirizzi obsidian:// (non compaiono nel grafo).
     `with_originals`: se False non si scrivono gli originali e non c'e' nessun collegamento ad essi.
     `group_size`: capitoli per file (0 = tutto in un solo file, default; 1 = uno per file); con piu' capitoli
-    per file ognuno e' una sezione con il suo titoletto e i collegamenti puntano alla sezione."""
+    per file ognuno e' una sezione con il suo titoletto e i collegamenti puntano alla sezione.
+    `bars`: barre di navigazione per sezione: "tutte" (sopra e sotto), "una" (sopra), "nessuna" (solo una
+    in cima al file; con un capitolo per file vale come "una")."""
     tags = tuple(tags)
     title = book.metadata.title
     index_stem = index_name(title)
@@ -262,8 +286,19 @@ def write_book(book: Book, out_dir: Path, overwrite_working: bool = False,
             other_stem=other[i] if (kind == ORIGINAL or with_originals) else None,
             book_title=title, tags=tags, to_url=to_url)
 
+    def file_ctx(kind: str, k: int) -> NavContext:
+        """Navigazione del FILE intero (usata da bars="nessuna"): file vicini e versione opposta."""
+        mine = [original_name(p.stem) if kind == ORIGINAL else p.stem for p in pages]
+        other = [p.stem if kind == ORIGINAL else original_name(p.stem) for p in pages]
+        return NavContext(
+            kind, index_stem,
+            prev_stem=mine[k - 1] if k > 0 else None,
+            next_stem=mine[k + 1] if k < len(pages) - 1 else None,
+            other_stem=other[k] if (kind == ORIGINAL or with_originals) else None,
+            book_title=title, tags=tags, to_url=to_url)
+
     kept = 0
-    for page in pages:
+    for k, page in enumerate(pages):
         for kind in ([ORIGINAL] if with_originals else []) + [COPY]:
             texts = []
             for i in page.chapters:
@@ -275,9 +310,10 @@ def write_book(book: Book, out_dir: Path, overwrite_working: bool = False,
 
             if grouped:
                 content = dress_sections([Section(headings[i], text, make_ctx(kind, i))
-                                          for i, text in zip(page.chapters, texts)])
+                                          for i, text in zip(page.chapters, texts)],
+                                         bars, file_ctx(kind, k))
             else:
-                content = dress(texts[0], make_ctx(kind, page.chapters[0]))
+                content = dress(texts[0], make_ctx(kind, page.chapters[0]), bars)
 
             if kind == ORIGINAL:
                 _write_original(originals_dir / f"{original_name(page.stem)}.md", content)
@@ -291,5 +327,9 @@ def write_book(book: Book, out_dir: Path, overwrite_working: bool = False,
                            overwrite_working)
 
     style_path, in_vault = _install_style(out_dir)
+
+    # Copia Guida-LiberMD.md e la cartella bookmarks/ nel libro
+    _copy_guides_and_bookmarks(out_dir)
+
     return WriteResult(kept_existing=kept, style_path=style_path, style_in_vault=in_vault,
                        files=len(pages))
