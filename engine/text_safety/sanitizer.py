@@ -24,6 +24,7 @@ Il modulo non dipende da nient'altro: contiene solo funzioni pure su stringhe.
     sanitize_name(titolo)     nome sicuro per un file di nota (e per i [[link]])
     sanitize_filename(nome)   nome sicuro per un'immagine
     clean_alias(testo)        alias sicuro per [[nota|alias]]
+    clean_heading(testo)      testo sicuro per un'ancora [[nota#titoletto]]
     section_heading(n, w, t)  titoletto di una sezione (es. "03 - Titolo"), a cui si puo' puntare con [[nota#titoletto]]
     clean_tag(testo)          tag valido per Obsidian (senza # e senza spazi)
     clean_tags(lista)         ripulisce una lista di tag: (validi senza doppioni, scartati)
@@ -31,6 +32,7 @@ Il modulo non dipende da nient'altro: contiene solo funzioni pure su stringhe.
 """
 from __future__ import annotations
 
+import html
 import posixpath
 import re
 
@@ -98,8 +100,8 @@ def plain_title(text: str) -> str:
     generati dal convertitore, poi le barre di escape messe dal sanificatore.
     """
     text = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", text)   # immagini generate (quelle nel testo sono escapate)
-    text = re.sub(r"<[^>]+>", "", text)                    # <sup> ecc. generati
-    text = re.sub(r"(?<!\\)[*`~]", "", text)               # marcatori generati, non quelli escapati
+    text = re.sub(r"<[^>]+>", "", text)                # <sup> ecc. generati
+    text = re.sub(r"(?<!\\)[*`~]", "", text)           # marcatori generati, non quelli escapati
     return re.sub(r"\s+", " ", unescape(text)).strip()
 
 
@@ -123,6 +125,7 @@ def truncate_words(text: str, limit: int) -> str:
 
 def sanitize_name(name: str, max_len: int = 60) -> str:
     """Nome sicuro per un file di nota."""
+    name = html.unescape(name)
     name = _FORBIDDEN_NAME_CHARS.sub("", name)
     name = re.sub(r"\s+", " ", name).strip(" .")
     return truncate_words(name, max_len).strip(" .") or "Senza titolo"
@@ -137,6 +140,7 @@ def sanitize_filename(name: str) -> str:
 
 def clean_alias(text: str) -> str:
     """Testo sicuro da usare come alias in [[nota|alias]]."""
+    text = html.unescape(text)
     return re.sub(r"\s+", " ", re.sub(r"[\[\]|#^]", " ", text)).strip()
 
 
@@ -178,20 +182,24 @@ def clean_tags(tags) -> tuple[list[str], list[str]]:
 # Titoletti delle sezioni (quando piu' capitoli stanno nello stesso file)
 # ----------------------------------------------------------------------------
 
-_HEADING_STRIP = re.compile(r"[\[\]|#^*_~`$<>\\]|%%|==")
+_HEADING_FORBIDDEN = re.compile(r'[\[\]|#^/\\*_~`$<>:]|%%|==')
 
 
 def clean_heading(text: str) -> str:
     """
     Testo sicuro per un titoletto a cui punta un collegamento [[nota#titoletto]]:
-    Obsidian non accetta alcuni caratteri nei collegamenti ai titoletti (# | ^ : [ ] %%) e
-    altri verrebbero interpretati come formattazione (* _ ~ ` $ == < >).
+    Obsidian non accetta caratteri strutturali (# | ^ / [ ] \\) e formattazioni inline (* _ ~ ` $ == < >).
+    Decodifica le entita' HTML e rimuove tag residui per mantenere identita' esatta tra link e intestazione.
     """
+    text = html.unescape(text)
+    text = re.sub(r"<[^>]+>", "", text)
     text = re.sub(r"\s*:\s*", " - ", text)
-    text = _HEADING_STRIP.sub(" ", text)
-    return re.sub(r"\s+", " ", text).strip(" .-")
+    text = _HEADING_FORBIDDEN.sub(" ", text)
+    return re.sub(r"\s+", " ", text).strip(" .-_,;")
 
 
 def section_heading(number: int, width: int, title: str) -> str:
-    """Titoletto di una sezione: il numero del capitolo (rende unico il titoletto) + il titolo."""
-    return f"{number:0{width}d} - {truncate_words(clean_heading(title), 80) or 'Senza titolo'}"
+    """Titoletto di una sezione: numero capitolo + titolo ripulito e troncato senza spezzare parole."""
+    cleaned = clean_heading(title)
+    short = truncate_words(cleaned, 80).strip(" .-_,;")
+    return f"{number:0{width}d} - {short or 'Senza titolo'}"

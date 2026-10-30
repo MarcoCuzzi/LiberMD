@@ -7,9 +7,9 @@ Il Segnalibro Mobile risolve questo limite: posiziona un elemento visivo chiaro 
 1. Come inserire il segnalibro
 
 Quando decidi di interrompere la sessione di lettura, vai a capo sotto l'ultimo paragrafo letto e scrivi:
-
+```Markdown
 ![[bookmark]]
-
+```
 
 Nel testo comparirà subito l'immagine del segnalibro (formato compatto 250x250) seguita dalla riga di stato:
 
@@ -44,11 +44,18 @@ Il metodo funziona spostando il segnalibro esattamente come faresti con un nastr
 
 Trova: cerca #segnalibro e salta al punto di lettura.
 
-Rimuovi: cancella o taglia (Ctrl + X) la riga ![[bookmark]].
+Rimuovi: cancella o taglia (Ctrl + X) la riga 
+```Markdown
+![[bookmark]]
+```
 
 Leggi: procedi con la lettura del testo.
 
-Riponi: quando decidi di fermarti, scrivi o incolla (Ctrl + V) di nuovo ![[bookmark]] sotto l'ultimo paragrafo letto.
+Riponi: quando decidi di fermarti, scrivi o incolla (Ctrl + V) di nuovo
+```Markdown
+![[bookmark]]
+``` 
+sotto l'ultimo paragrafo letto.
 
 4. Personalizzazione
 

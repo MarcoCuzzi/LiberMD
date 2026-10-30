@@ -92,9 +92,11 @@ def nav_bar(ctx: NavContext, compact: bool = False) -> str:
 def original_notice(ctx: NavContext) -> str:
     """Avviso in cima agli ORIGINALI: ricorda di scrivere le note nella copia di lavoro."""
     copy_file = (ctx.other_stem or "").partition("#")[0]      # il file, senza il titoletto
+    # Se siamo dentro un originale, il link risale al livello cartella superiore
+    target = f"../{copy_file}" if ctx.kind == ORIGINAL and not copy_file.startswith("../") else copy_file
     return (f"> [!{NOTICE_CALLOUT}] Copia originale\n"
             f"> Questo è il testo intatto del libro. Le tue note vanno nella "
-            f"[[{copy_file}|tua copia]].\n\n")
+            f"[[{target}|tua copia]].\n\n")
 
 
 def _yaml(value: str) -> str:
